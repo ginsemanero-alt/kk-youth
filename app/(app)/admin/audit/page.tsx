@@ -6,16 +6,15 @@ import { formatDateTime } from '@/lib/format'
 import type { AuditLog } from '@/lib/types'
 import { Badge, Card, EmptyState, PageHeader, SectionTitle, chipCls, type Tone } from '@/components/ui'
 import { ScrollText } from 'lucide-react'
-import PurgeCard from './PurgeCard'
 
 export const metadata = { title: 'Audit log' }
 export const dynamic = 'force-dynamic'
 
-const ACTIONS = ['insert', 'update', 'delete', 'restore', 'view', 'export', 'approve', 'reject', 'purge']
-const TONE: Record<string, Tone> = { insert: 'green', update: 'blue', delete: 'red', restore: 'teal', view: 'amber', export: 'violet', approve: 'green', reject: 'rose', purge: 'ink' }
+const ACTIONS = ['insert', 'update', 'delete', 'restore', 'view', 'export', 'approve', 'reject', 'purge', 'denied']
+const TONE: Record<string, Tone> = { insert: 'green', update: 'blue', delete: 'red', restore: 'teal', view: 'amber', export: 'violet', approve: 'green', reject: 'rose', purge: 'ink', denied: 'red' }
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ action?: string }> }) {
-  await requireRole(['admin'])
+  await requireRole(['admin'], '/admin/audit')
   const { action } = await searchParams
   const supabase = await createClient()
   let q = supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200)
@@ -26,7 +25,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="space-y-8">
-      <PageHeader eyebrow="Accountability" title="Audit log and data retention" subtitle="Who created, edited, deleted, viewed contact numbers of, or exported records. The log is append-only." />
+      <PageHeader eyebrow="Accountability" title="Audit logs" subtitle="Who created, edited, deleted, viewed contact numbers of, or exported records, and who opened a page their role does not allow (denied). The log is append-only." />
 
       <div className="flex flex-wrap gap-2">
         <Link href="/admin/audit" className={chipCls(!action)}>All</Link>
@@ -65,7 +64,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
       <Card>
         <SectionTitle>Retention policy</SectionTitle>
         <p className="font-semibold text-slate-600">{note?.retention_note}</p>
-        <PurgeCard />
+        <Link href="/archive" className="mt-4 inline-flex font-black text-brand hover:underline">Deleted profiles and permanent purge are on the Archive page</Link>
       </Card>
     </div>
   )

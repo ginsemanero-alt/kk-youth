@@ -8,7 +8,7 @@ import YouthForm from '@/components/YouthForm'
 export const metadata = { title: 'Add youth' }
 
 export default async function NewYouthPage() {
-  await requireRole(['admin', 'encoder'])
+  await requireRole(['admin', 'encoder'], '/youth/new')
   const supabase = await createClient()
   const [{ data: puroks }, settings, questions] = await Promise.all([
     supabase.from('puroks').select('id, name').is('deleted_at', null).order('name'),

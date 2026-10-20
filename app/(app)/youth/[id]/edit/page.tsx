@@ -11,7 +11,7 @@ import { toYesNo, type ProfileValues } from '@/lib/validation'
 export const metadata = { title: 'Edit youth' }
 
 export default async function EditYouthPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireRole(['admin', 'encoder'])
+  await requireRole(['admin', 'encoder'], '/youth/[id]/edit')
   const { id } = await params
   const supabase = await createClient()
   const [{ data }, { data: sens }, { data: answers }, { data: puroks }, settings, questions] = await Promise.all([

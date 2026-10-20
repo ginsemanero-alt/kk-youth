@@ -11,6 +11,7 @@ const s4 = fs.readFileSync(dir + '04_form_fields_extra.sql', 'utf8')
 const s5 = fs.readFileSync(dir + '05_form_settings.sql', 'utf8')
 const s6 = fs.readFileSync(dir + '06_custom_questions.sql', 'utf8')
 const s7 = fs.readFileSync(dir + '07_user_management.sql', 'utf8')
+const s8 = fs.readFileSync(dir + '08_viewer_aggregate_only.sql', 'utf8')
 const allInOne = fs.readFileSync(dir + 'all_in_one.sql', 'utf8')
 const { bundle } = await import('../../scripts/bundle-sql.mjs')
 
@@ -54,8 +55,9 @@ try {
   await db.exec(s5); console.log('05 applied')
   await db.exec(s6); console.log('06 applied')
   await db.exec(s7); console.log('07 applied')
-  for (const f of [s1, s2, s3, s4, s5, s6, s7]) await db.exec(f)
-  console.log('re-applied 01 to 07 in order (idempotent)')
+  await db.exec(s8); console.log('08 applied')
+  for (const f of [s1, s2, s3, s4, s5, s6, s7, s8]) await db.exec(f)
+  console.log('re-applied 01 to 08 in order (idempotent)')
   ok('all_in_one.sql is up to date (npm run sql:bundle)', allInOne === bundle())
   await db.exec(allInOne); console.log('all_in_one.sql applied on top (idempotent)')
   ok('seed puroks, idempotent', (await q('select count(*)::int c from puroks'))[0].c === 4)
@@ -220,9 +222,11 @@ try {
   ok('viewer cannot record attendance', e && /row-level security/.test(e), e)
   const st = (await asUser(id.view, `select * from activity_stats`)).rows[0]
   ok('participation rate computed in SQL', st.attendees === 1 && Number(st.participation_rate) > 0, JSON.stringify(st))
-  const un = (await asUser(id.view, `select * from unreached_youth(null)`)).rows
+  // Individual lists are for Admin and Encoder (RBAC); Viewers get none of these rows.
+  const un = (await asUser(id.enc, `select * from unreached_youth(null)`)).rows
   ok('unreached list excludes attendee', un.length === dash.total - 1 && !un.some((u) => u.id === y1.id))
-  const ref = (await asUser(id.view, `select referrals, is_osy from youth_overview where id='${y1.id}'`)).rows[0]
+  ok('viewer gets no unreached list (individual names)', (await asUser(id.view, `select * from unreached_youth(null)`)).rows.length === 0)
+  const ref = (await asUser(id.enc, `select referrals, is_osy from youth_overview where id='${y1.id}'`)).rows[0]
   ok('OSY gets referral suggestions', ref.is_osy && ref.referrals.length >= 2, JSON.stringify(ref))
 
   // ----- purok guard + purge + storage
@@ -336,7 +340,7 @@ try {
   ok('viewer cannot read sensitive columns of youth', e && /permission denied/.test(e), e)
   e = await err(id.enc, `select medical_details from youth`)
   ok('no API role reads sensitive columns from youth directly', e && /permission denied/.test(e), e)
-  const ov = (await asUser(id.view, `select * from youth_overview where id='${sId}'`)).rows[0]
+  const ov = (await asUser(id.enc, `select * from youth_overview where id='${sId}'`)).rows[0]
   ok('youth_overview has no sensitive columns', ov && !('religion' in ov) && !('has_disability' in ov) && !('medical_details' in ov) && !('disability_details' in ov))
   ok('viewer gets no rows from youth_sensitive', (await asUser(id.view, `select * from youth_sensitive`)).rows.length === 0)
   ok('anon cannot read youth_sensitive', /permission denied/.test(await anonErr(`select * from youth_sensitive`) ?? ''))
@@ -445,8 +449,9 @@ try {
   ok('viewer cannot read custom_answers from youth', e && /permission denied/.test(e), e)
   e = await err(id.enc, `select custom_answers from youth where id='${qSpi}'`)
   ok('no API role reads custom_answers from youth directly', e && /permission denied/.test(e), e)
-  const vView = (await asUser(id.view, `select * from youth_custom_answers where id='${qSpi}'`)).rows[0]
-  ok('viewer sees non-sensitive answers only', vView && vView.answers[qShirt.id] === 'S' && !(qSecret.id in vView.answers) && vView.sensitive_answers === null, JSON.stringify(vView))
+  ok('viewer gets no individual answers', (await asUser(id.view, `select * from youth_custom_answers`)).rows.length === 0)
+  const vEncPub = (await asUser(id.enc, `select * from youth_custom_answers where id='${qSpi}'`)).rows[0]
+  ok('answers column holds only non-sensitive answers', vEncPub && vEncPub.answers[qShirt.id] === 'S' && !(qSecret.id in vEncPub.answers), JSON.stringify(vEncPub))
   ok('viewer sees no sensitive answer anywhere', !JSON.stringify((await asUser(id.view, `select * from youth_custom_answers`)).rows).includes('SecretAns'))
   const vEnc = (await asUser(id.enc, `select * from youth_custom_answers where id='${qSpi}'`)).rows[0]
   ok('encoder sees sensitive answers', vEnc.sensitive_answers?.[qSecret.id] === 'Below 10k SecretAns', JSON.stringify(vEnc))
@@ -473,8 +478,11 @@ try {
   ok('deactivated question is not required and its answer is dropped', (await q(`select custom_answers a from youth where id='${r.rows[0].id}'`))[0].a[qShirt.id] === undefined)
 
   // ===== Role matrix: what each of the three users can and cannot do =====
-  // Viewer: read-only
-  ok('viewer can read active youth', (await asUser(id.view, `select id from youth_overview where id='${y1.id}'`)).rows.length === 1)
+  // Viewer: aggregate statistics only, no individual records
+  ok('viewer cannot read individual youth rows', (await asUser(id.view, `select id from youth`)).rows.length === 0)
+  ok('viewer cannot read individual youth through youth_overview', (await asUser(id.view, `select id from youth_overview`)).rows.length === 0)
+  ok('viewer cannot read attendance (who attended)', (await asUser(id.view, `select youth_id from attendance`)).rows.length === 0)
+  ok('encoder can read individual youth', (await asUser(id.enc, `select id from youth_overview where id='${y1.id}'`)).rows.length === 1)
   ok('viewer cannot edit youth (0 rows)', (await asUser(id.view, `update youth set civil_status='married' where id='${y1.id}' returning id`)).rows.length === 0)
   ok('viewer cannot read registrations', (await asUser(id.view, `select id from pending_registrations`)).rows.length === 0)
   e = await err(id.view, `select reject_registration('${p2.id}', 'x')`)
@@ -506,9 +514,42 @@ try {
   ok('admin can edit puroks', (await asUser(id.admin, `update puroks set description='Updated by admin' where id='${purok}' returning id`)).rows.length === 1)
   ok('admin can create puroks', (await asUser(id.admin, `insert into puroks (name) values ('Purok 9') returning id`)).rows.length === 1)
   ok('admin can deactivate a user', (await asUser(id.admin, `update profiles set is_active=false where id='${id.view}' returning id`)).rows.length === 1)
-  ok('deactivated viewer sees nothing', (await asUser(id.view, `select id from youth_overview`)).rows.length === 0)
+  e = await err(id.view, `select dashboard_summary()`)
+  ok('deactivated viewer sees nothing (not even aggregates)', e && e.includes('Not allowed'), e)
+  ok('deactivated viewer gets no activity stats', (await asUser(id.view, `select id from activity_stats`)).rows.length === 0)
   await asUser(id.admin, `update profiles set is_active=true where id='${id.view}'`)
-  ok('admin can reactivate a user', (await asUser(id.view, `select id from youth_overview`)).rows.length > 0)
+  ok('admin can reactivate a user', (await asUser(id.view, `select dashboard_summary() d`)).rows[0].d.total > 0)
+
+  // ===== RBAC: Viewer aggregates, counting rules, denied-access log =====
+  const activeCount = (await q(`select count(*)::int c from youth where deleted_at is null`))[0].c
+  const vd = (await asUser(id.view, `select dashboard_summary() d`)).rows[0].d
+  ok('dashboard total = active (not deleted) youth', vd.total === activeCount, `${vd.total} vs ${activeCount}`)
+  ok('dashboard purok counts add up to the total', vd.puroks.reduce((a, p) => a + p.count, 0) === activeCount)
+  ok('pending registrations are not counted as youth', (await q(`select count(*)::int c from pending_registrations where status='pending'`))[0].c > 0 && vd.total === activeCount)
+  const sr = (await asUser(id.view, `select summary_report() r`)).rows[0].r
+  ok('viewer gets the summary report', sr && sr.total === activeCount && sr.masked === true, JSON.stringify(sr).slice(0, 160))
+  ok('summary report has aggregate groups only (no names)', sr.groups.purok && sr.groups.sex && !JSON.stringify(sr).includes('Maria'))
+  const qaPurok = (await asUser(id.admin, `insert into puroks (name) values ('Purok QA') returning id`)).rows[0].id
+  await asUser(id.enc, ins({ first_name: 'Solo', last_name: 'Resident', purok_id: qaPurok }).youth)
+  const small = (await asUser(id.view, `select summary_report('${qaPurok}') r`)).rows[0].r
+  ok('viewer sees "<3" for a group of one', small.total === '<3', JSON.stringify(small.total))
+  ok('encoder sees the real small count', (await asUser(id.enc, `select summary_report('${qaPurok}') r`)).rows[0].r.total === 1)
+  e = await err(id.view, `select summary_report(null, 'bad')`)
+  ok('summary report rejects unknown filters', e && e.includes('Unknown age bracket'), e)
+  e = await anonErr(`select dashboard_summary()`)
+  ok('anon cannot call dashboard_summary', e && /permission denied/.test(e), e)
+  e = await anonErr(`select summary_report()`)
+  ok('anon cannot call summary_report', e && /permission denied/.test(e), e)
+  e = await anonErr(`select * from activity_stats`)
+  ok('anon cannot read activity_stats', e && /permission denied/.test(e), e)
+  await asUser(id.view, `select log_access_denied('/import')`)
+  await asUser(id.view, `select log_access_denied('/import')`)
+  ok('denied page access is logged once per minute', (await q(`select count(*)::int c from audit_logs where action='denied' and actor_id='${id.view}' and detail->>'path'='/import'`))[0].c === 1)
+  ok('denied log records role and path only', (await q(`select detail from audit_logs where action='denied' and actor_id='${id.view}'`))[0].detail.role === 'viewer')
+  e = await anonErr(`select log_access_denied('/x')`)
+  ok('anon cannot write denied entries', e && /permission denied/.test(e), e)
+  ok('viewer cannot read the denied log', (await asUser(id.view, `select id from audit_logs where action='denied'`)).rows.length === 0)
+  ok('admin reads the denied log', (await asUser(id.admin, `select id from audit_logs where action='denied'`)).rows.length === 1)
 
   // inactive user loses all access
   await db.exec(`update profiles set is_active=false where id='${id.enc2}'`)
@@ -522,12 +563,12 @@ try {
   ok('admin cannot archive own account', e && e.includes('own account'), e)
   const arch = (await asUser(id.admin, `update profiles set archived_at=now() where id='${id.view}' returning archived_at, archived_by, is_active`)).rows[0]
   ok('admin archives a user: stamped and deactivated', arch && arch.archived_at && arch.archived_by === id.admin && arch.is_active === false, JSON.stringify(arch))
-  ok('archived user has no access', (await asUser(id.view, `select id from youth_overview`)).rows.length === 0)
+  ok('archived user has no access', /Not allowed/.test(await err(id.view, `select dashboard_summary()`) ?? ''))
   e = await err(id.admin, `update profiles set is_active=true where id='${id.view}'`)
   ok('archived account cannot be reactivated without restoring', e && e.includes('Restore the account'), e)
   const rest = (await asUser(id.admin, `update profiles set archived_at=null where id='${id.view}' returning archived_at, is_active`)).rows[0]
   ok('restore brings the account back active', rest && rest.archived_at === null && rest.is_active === true, JSON.stringify(rest))
-  ok('restored user has access again', (await asUser(id.view, `select id from youth_overview`)).rows.length > 0)
+  ok('restored user has access again', (await asUser(id.view, `select dashboard_summary() d`)).rows[0].d.total > 0)
   ok('archive and restore are audited', (await q(`select count(*)::int c from audit_logs where table_name='profiles' and action='update' and record_id='${id.view}' and (new_data -> 'archived_at') is not null`))[0].c === 2)
 
   e = await err(id.enc, `select log_user_admin_action('${id.view}', 'delete')`)

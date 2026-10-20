@@ -3,31 +3,38 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
-  Activity, BarChart3, ClipboardCheck, FileText, KeyRound, LifeBuoy, LogOut, MapPin, Menu, ScrollText, SlidersHorizontal, Upload, Users, UsersRound, X,
+  Activity, Archive, BarChart3, ClipboardCheck, FileText, KeyRound, LifeBuoy, LogOut, MapPin, Menu, PieChart, ScrollText, SlidersHorizontal, Upload, Users,
+  UsersRound, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Role } from '@/lib/types'
 import { RoleBadge } from '@/components/ui'
 import { BrandMark, TriStripe } from '@/components/Logo'
 
-interface Item { href: string; label: string; icon: LucideIcon; roles: Role[] }
+interface Item { href: string; label: string; viewerLabel?: string; icon: LucideIcon; roles: Role[]; section: 'main' | 'admin' | 'account' }
 
 const ALL: Role[] = ['admin', 'encoder', 'viewer']
 const STAFF: Role[] = ['admin', 'encoder']
 
+// Menu per role. Hiding a link is only convenience: every page checks the role on the server
+// (requireRole) and the database checks it again (RLS). Keep in sync with scripts/check-routes.mjs.
 const ITEMS: Item[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: BarChart3, roles: ALL },
-  { href: '/youth', label: 'Youth registry', icon: Users, roles: ALL },
-  { href: '/osy', label: 'Out-of-school youth', icon: LifeBuoy, roles: ALL },
-  { href: '/activities', label: 'Activities', icon: Activity, roles: ALL },
-  { href: '/reports', label: 'Reports', icon: FileText, roles: ALL },
-  { href: '/registrations', label: 'Registrations', icon: ClipboardCheck, roles: STAFF },
-  { href: '/import', label: 'Excel import', icon: Upload, roles: STAFF },
-  { href: '/puroks', label: 'Puroks', icon: MapPin, roles: ['admin'] },
-  { href: '/admin/form-settings', label: 'Form settings', icon: SlidersHorizontal, roles: ['admin'] },
-  { href: '/admin/users', label: 'Users', icon: UsersRound, roles: ['admin'] },
-  { href: '/admin/audit', label: 'Audit and data', icon: ScrollText, roles: ['admin'] },
+  { href: '/dashboard', label: 'Dashboard', icon: BarChart3, roles: ALL, section: 'main' },
+  { href: '/youth', label: 'Youth registry', icon: Users, roles: STAFF, section: 'main' },
+  { href: '/osy', label: 'Out-of-school youth', icon: LifeBuoy, roles: STAFF, section: 'main' },
+  { href: '/registrations', label: 'Registrations', icon: ClipboardCheck, roles: STAFF, section: 'main' },
+  { href: '/activities', label: 'Activities and attendance', icon: Activity, roles: STAFF, section: 'main' },
+  { href: '/import', label: 'Excel import', icon: Upload, roles: STAFF, section: 'main' },
+  { href: '/statistics', label: 'Youth statistics', icon: PieChart, roles: ALL, section: 'main' },
+  { href: '/reports', label: 'Reports', viewerLabel: 'Summary reports', icon: FileText, roles: ALL, section: 'main' },
+  { href: '/puroks', label: 'Puroks', icon: MapPin, roles: ['admin'], section: 'admin' },
+  { href: '/admin/form-settings', label: 'Form settings', icon: SlidersHorizontal, roles: ['admin'], section: 'admin' },
+  { href: '/admin/users', label: 'Users', icon: UsersRound, roles: ['admin'], section: 'admin' },
+  { href: '/admin/audit', label: 'Audit logs', icon: ScrollText, roles: ['admin'], section: 'admin' },
+  { href: '/archive', label: 'Archive', icon: Archive, roles: ['admin'], section: 'admin' },
+  { href: '/account', label: 'My account', icon: KeyRound, roles: ALL, section: 'account' },
 ]
+const SECTION_TITLE = { main: '', admin: 'Admin', account: 'Account' }
 
 export default function AppShell({ role, name, children }: { role: Role; name: string; children: React.ReactNode }) {
   const path = usePathname()
@@ -36,14 +43,13 @@ export default function AppShell({ role, name, children }: { role: Role; name: s
 
   const nav = (
     <nav aria-label="Main" className="stagger flex flex-col gap-1">
-      {items.map(({ href, label, icon: Icon }, i) => {
+      {items.map(({ href, label, viewerLabel, icon: Icon, section }, i) => {
         const active = path === href || (href !== '/dashboard' && path.startsWith(href + '/'))
-        // Label the start of the Admin-only links.
-        const adminOnly = (k: number) => items[k].roles.length === 1
-        const firstAdmin = adminOnly(i) && i > 0 && !adminOnly(i - 1)
+        // Label the start of each section (Admin, Account).
+        const sectionStart = i > 0 && items[i - 1].section !== section && SECTION_TITLE[section]
         return (
           <div key={href}>
-            {firstAdmin && <div className="mb-2 mt-4 px-5 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Admin</div>}
+            {sectionStart && <div className="mb-2 mt-4 px-5 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{SECTION_TITLE[section]}</div>}
             <Link
               href={href}
               onClick={() => setOpen(false)}
@@ -55,7 +61,7 @@ export default function AppShell({ role, name, children }: { role: Role; name: s
               <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition duration-300 ${active ? 'bg-ink text-sun' : 'bg-white/10 text-white group-hover:scale-110 group-hover:bg-white/20'}`}>
                 <Icon className="h-4 w-4" aria-hidden />
               </span>
-              {label}
+              {role === 'viewer' && viewerLabel ? viewerLabel : label}
             </Link>
           </div>
         )
@@ -74,10 +80,7 @@ export default function AppShell({ role, name, children }: { role: Role; name: s
           <div className="mt-1"><RoleBadge role={role} /></div>
         </div>
       </div>
-      <Link href="/account" onClick={() => setOpen(false)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-black text-white hover:bg-white/20">
-        <KeyRound className="h-4 w-4" aria-hidden /> My account
-      </Link>
-      <form action="/auth/signout" method="post" className="mt-2">
+      <form action="/auth/signout" method="post" className="mt-4">
         <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-black text-white hover:bg-white/20">
           <LogOut className="h-4 w-4" aria-hidden /> Sign out
         </button>

@@ -9,7 +9,7 @@ export const metadata = { title: 'Form settings' }
 export const dynamic = 'force-dynamic'
 
 export default async function FormSettingsPage() {
-  await requireRole(['admin'])
+  await requireRole(['admin'], '/admin/form-settings')
   const supabase = await createClient()
   const [{ data, error }, { data: puroks }, questions] = await Promise.all([
     supabase.from('form_fields').select('*').order('sort_order'),

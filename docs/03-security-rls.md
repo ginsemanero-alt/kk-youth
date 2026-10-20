@@ -10,17 +10,49 @@ Roles live in `public.profiles.role`. `get_user_role()` (SECURITY DEFINER) retur
 |---|---|---|---|---|
 | profiles | none | own row | own row | all; update role, status, name, archive/restore (not own); delete and password reset through audited server actions |
 | puroks | read active | read | read | read, add, edit, soft delete |
-| youth | none | read active (no sensitive columns) | read, add, edit | read incl. deleted, add, edit, soft delete and restore |
+| youth | none | **no rows** | read, add, edit | read incl. deleted, add, edit, soft delete and restore |
+| youth_overview, unreached_youth() | none | **no rows** (follow youth RLS) | read | read incl. deleted |
 | youth_sensitive (view) | none | no rows | read active | read incl. deleted |
 | form_fields | read | read | read | read; update show/required only |
 | custom_questions | read active | read all | read all | read all, add, edit, deactivate (no delete) |
-| youth_custom_answers (view) | none | non-sensitive answers | all answers | all answers |
+| youth_custom_answers (view) | none | **no rows** | all answers | all answers |
 | youth_contacts | none | none | via RPC only | via RPC only |
-| activities | none | read | read, add, edit | same as encoder |
-| attendance | none | read | read, add, remove | same |
+| activities | none | read (titles and dates) | read, add, edit | same as encoder |
+| attendance | none | **no rows** | read, add, remove | same |
+| activity_stats, dashboard_summary(), summary_report() | none | aggregate counts only (1 or 2 shown as "<3") | aggregate counts | aggregate counts |
 | pending_registrations | insert only | none | read, review (RPC) | same |
 | audit_logs | none | none | none | read only |
 | storage consent-scans | none | none | read, upload | read, upload, delete |
+
+## Role-based access (RBAC)
+
+Three roles, read from `profiles.role` by `get_user_role()` on every request and every query; the browser never sends a role, a missing or inactive profile gets no access, and the Viewer sees **aggregate statistics only**.
+
+| Feature | Admin | Encoder | Viewer |
+|---|---|---|---|
+| Dashboard (aggregate) | Yes, plus recent activity | Yes, plus pending registrations and recent updates | Yes (counts only) |
+| Youth statistics, summary reports (aggregate, export) | Yes | Yes | Yes, small counts shown as "<3" |
+| Youth registry, profiles, search | Yes, incl. deleted | Yes | No |
+| Add and edit profiles, duplicate check | Yes | Yes | No |
+| Out-of-school list with names | Yes | Yes | No (counts on Youth statistics) |
+| Approve or reject registrations | Yes | Yes (existing workflow) | No |
+| Activities and attendance | Yes | Yes | No (participation counts only) |
+| Excel import | Yes | Yes | No |
+| Individual report and export | Yes | Yes | No |
+| Sensitive fields (religion, PWD, medical) | Read and export | Read | No |
+| Contact number reveal (audited) | Yes | Yes | No |
+| Consent scans | Read, upload, delete | Read, upload | No |
+| Delete, restore youth; Archive page | Yes | No | No |
+| Permanent purge (retention) | Yes | No | No |
+| Puroks, form settings, users and roles | Yes | No | No |
+| Audit logs | Yes | No | No |
+| Own password (My account) | Yes | Yes | Yes |
+
+Pages: every page under `app/(app)` calls `requireRole(roles, path)` on the server before reading data, and `npm run test:routes` checks each page and menu link against this matrix. A signed-in user who opens a page their role does not allow is redirected to the dashboard and the attempt is written to the audit log as `denied` (at most once a minute per user and page; only the path and role are recorded). The database enforces the same rules again, so a direct Supabase query, URL or manipulated request gets no individual rows for a Viewer.
+
+Small-count suppression: `summary_report()` returns counts of 1 or 2 as `"<3"` for Viewers, so a filter such as "one purok, one age group" cannot single out a person. Admin and Encoder see the real numbers.
+
+Changed existing logic, and why (08 and the edits it goes with): the `youth read` and `attendance read` policies (02) and the `youth_custom_answers` view (06) now admit Admin and Encoder only, because Viewers must not retrieve individual records. `dashboard_summary()` (01) and the `activity_stats` view (moved from 01 to 02, after `get_user_role()`) now run with the owner's rights and check the caller's role themselves, so Viewers still get correct aggregate counts. The audit action list gains `denied`.
 
 No table is left without a policy: `youth_contacts` has an explicit deny-all policy, and `02_security.sql` ends with a check that fails if any public table lacks RLS or a policy.
 
@@ -72,4 +104,4 @@ Soft-deleted youth are kept 365 days, then an Admin runs `purge_soft_deleted()` 
 
 ## Tests
 
-`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 204 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It also checks a role matrix (what Viewer, Encoder and Admin can and cannot do). It applies 01 to 06 twice in order to prove they can be re-run. Run: `npm run test:db`.
+`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 226 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It also checks a role matrix (what Viewer, Encoder and Admin can and cannot do), the Viewer's aggregate-only access (no individual rows from any table, view or function; "<3" for small counts), dashboard counts against the real rows (deleted and pending excluded), and the denied-access log. `npm run test:routes` checks every page guard and menu link against the RBAC matrix and that the service-role client never reaches client code. It applies 01 to 08 twice in order to prove they can be re-run. Run: `npm run test:db`.

@@ -13,7 +13,7 @@ const PAGE_SIZE = 20
 type SP = { q?: string; purok?: string; bracket?: string; edu?: string; emp?: string; page?: string; deleted?: string }
 
 export default async function YouthListPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const session = await requireRole(['admin', 'encoder', 'viewer'])
+  const session = await requireRole(['admin', 'encoder'], '/youth')
   const sp = await searchParams
   const page = Math.max(1, Number(sp.page) || 1)
   const supabase = await createClient()

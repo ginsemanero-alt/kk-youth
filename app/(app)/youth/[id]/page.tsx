@@ -27,7 +27,7 @@ function Tags({ items }: { items: string[] }) {
 }
 
 export default async function YouthDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await requireRole(['admin', 'encoder', 'viewer'])
+  const session = await requireRole(['admin', 'encoder'], '/youth/[id]')
   const { id } = await params
   const role = session.profile.role
   const supabase = await createClient()

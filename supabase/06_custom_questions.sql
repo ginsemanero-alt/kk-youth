@@ -219,14 +219,15 @@ revoke all on function public.filter_custom_answers(jsonb, boolean) from public,
 grant execute on function public.filter_custom_answers(jsonb, boolean) to authenticated;
 
 -- Runs with the owner's rights (API roles cannot read youth.custom_answers) and repeats the
--- row rules of the "youth read" policy. sensitive_answers is null for everyone but Admin and Encoder.
+-- row rules of the "youth read" policy: Admin and Encoder only. Viewers see answer counts
+-- through summary_report() (08_viewer_aggregate_only.sql), never individual answers.
 create or replace view public.youth_custom_answers with (security_barrier = true) as
 select y.id,
        public.filter_custom_answers(y.custom_answers, false) as answers,
        case when (select public.get_user_role()) in ('admin', 'encoder')
             then public.filter_custom_answers(y.custom_answers, true) end as sensitive_answers
 from public.youth y
-where (select public.get_user_role()) is not null
+where (select public.get_user_role()) in ('admin', 'encoder')
   and (y.deleted_at is null or (select public.get_user_role()) = 'admin');
 revoke all on public.youth_custom_answers from public, anon, authenticated;
 grant select on public.youth_custom_answers to authenticated;

@@ -9,7 +9,7 @@ export const metadata = { title: 'Users' }
 export const dynamic = 'force-dynamic'
 
 export default async function UsersPage() {
-  const session = await requireRole(['admin'])
+  const session = await requireRole(['admin'], '/admin/users')
   const supabase = await createClient()
   const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
   // Email addresses live in Supabase Auth, which only the service role can list (server side).

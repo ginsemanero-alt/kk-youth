@@ -11,7 +11,7 @@ import ExportButtons from '@/components/ExportButtons'
 export const metadata = { title: 'Out-of-school youth' }
 
 export default async function OsyPage({ searchParams }: { searchParams: Promise<{ purok?: string; emp?: string }> }) {
-  await requireRole(['admin', 'encoder', 'viewer'])
+  await requireRole(['admin', 'encoder'], '/osy')
   const sp = await searchParams
   const supabase = await createClient()
   const { data: puroks } = await supabase.from('puroks').select('id, name').is('deleted_at', null).order('name')

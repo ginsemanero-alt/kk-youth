@@ -8,7 +8,7 @@ import ImportWizard from './ImportWizard'
 export const metadata = { title: 'Excel import' }
 
 export default async function ImportPage() {
-  await requireRole(['admin', 'encoder'])
+  await requireRole(['admin', 'encoder'], '/import')
   const supabase = await createClient()
   const [{ data: puroks }, settings, questions] = await Promise.all([
     supabase.from('puroks').select('id, name').is('deleted_at', null).order('name'),

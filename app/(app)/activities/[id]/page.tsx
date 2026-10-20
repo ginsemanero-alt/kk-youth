@@ -12,7 +12,7 @@ import AttendanceManager from './AttendanceManager'
 export const metadata = { title: 'Activity' }
 
 export default async function ActivityPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await requireRole(['admin', 'encoder', 'viewer'])
+  const session = await requireRole(['admin', 'encoder'], '/activities/[id]')
   const { id } = await params
   const supabase = await createClient()
   const { data } = await supabase.from('activity_stats').select('*').eq('id', id).maybeSingle()

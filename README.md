@@ -6,13 +6,13 @@ Stack: Next.js 16 (App Router), React 19, Tailwind CSS v4, Supabase (Auth, Postg
 
 ## Modules
 
-Youth registry with duplicate detection, purok management, dashboard analytics (computed in SQL), report generator (PDF and Excel), activity and attendance tracking with participation rate and not-yet-reached list, self-registration by link or QR code with encoder approval, Excel import with error report, out-of-school youth flag with suggested referrals, roles (Admin, Encoder, Viewer), consent capture, encrypted contact numbers, audit log, soft delete and private consent-scan storage.
+Youth registry with duplicate detection, purok management, dashboard analytics (computed in SQL), report generator (PDF and Excel), activity and attendance tracking with participation rate and not-yet-reached list, self-registration by link or QR code with encoder approval, Excel import with error report, out-of-school youth flag with suggested referrals, roles (Admin, Encoder, Viewer: the Viewer sees aggregate statistics and summary reports only, never individual youth), consent capture, encrypted contact numbers, audit log, soft delete and private consent-scan storage.
 
 ## Setup
 
 1. **Install**: `npm install` (Node 20.9 or newer).
 2. **Supabase project**: create one at https://supabase.com. In Dashboard > Database > Extensions make sure `pgcrypto` and `supabase_vault` are enabled (they are by default).
-3. **Run the SQL** in Dashboard > SQL Editor. **Quickest:** open `supabase/all_in_one.sql`, paste the whole file and click Run (it contains 01, 02, 04, 05, 06 and 07 in order, and is safe to re-run). Run `supabase/03_seed.sql` separately only if you want sample puroks. After editing any SQL file, rebuild the bundle with `npm run sql:bundle` (the tests fail if it is out of date).
+3. **Run the SQL** in Dashboard > SQL Editor. **Quickest:** open `supabase/all_in_one.sql`, paste the whole file and click Run (it contains 01, 02, 04, 05, 06, 07 and 08 in order, and is safe to re-run). Run `supabase/03_seed.sql` separately only if you want sample puroks. After editing any SQL file, rebuild the bundle with `npm run sql:bundle` (the tests fail if it is out of date).
 
    Or run the files one at a time, in this order:
    1. `supabase/01_schema.sql`
@@ -22,6 +22,7 @@ Youth registry with duplicate detection, purok management, dashboard analytics (
    5. `supabase/05_form_settings.sql` (Admin form settings)
    6. `supabase/06_custom_questions.sql` (Admin's own questions)
    7. `supabase/07_user_management.sql` (archive accounts, audited delete and password reset)
+   8. `supabase/08_viewer_aggregate_only.sql` (Viewer gets aggregate statistics only; denied-access log)
 
    All files can be re-run safely. If you re-run any file, run every later file again in order afterwards (for example, 02 resets grants and 04 and 06 redefine the approval and import functions).
 4. **Environment**: copy `.env.example` to `.env.local` and fill in:
@@ -51,7 +52,7 @@ Push to GitHub, import the repo in Vercel, add the four environment variables, d
 - **Rate limiting**: before a public launch, put a CAPTCHA (Cloudflare Turnstile or Supabase CAPTCHA) in front of the self-registration form.
 - **Imports** are marked with consent source "import". The importing user confirms that signed consent forms are on file; under-18 rows need a guardian name.
 - Exports never include contact numbers or email addresses. Religion, disability, medical and sensitive question answers are exported only when an Admin ticks "Include sensitive information" on the Reports page (the read is logged).
-- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (204 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
+- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (226 checks in `supabase/tests`, plus 121 route checks in `npm run test:routes`). It has not been run against your own Supabase project, so test each role once after setup.
 
 ## Form settings (Admin)
 

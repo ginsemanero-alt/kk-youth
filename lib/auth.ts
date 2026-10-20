@@ -18,13 +18,27 @@ export async function getSession(): Promise<Session | null> {
   return { userId: userData.user.id, email: userData.user.email ?? '', profile: profile as Profile }
 }
 
-/** Page guard: must be signed in, active, and one of the allowed roles (RLS still re-checks every query). */
-export async function requireRole(allowed: Role[]): Promise<Session> {
+/**
+ * Page guard: must be signed in, active, and one of the allowed roles. The role is read from
+ * public.profiles on every request (never from the browser), and RLS re-checks every query.
+ * `path` is the route pattern (for example '/youth/[id]'); a refused visit is written to the
+ * audit log as 'denied' (at most once a minute per user and page).
+ */
+export async function requireRole(allowed: Role[], path?: string): Promise<Session> {
   const session = await getSession()
   if (!session) redirect('/login')
   if (!session.profile.is_active) redirect('/login?error=inactive')
-  if (!allowed.includes(session.profile.role)) redirect('/dashboard?denied=1')
+  if (!allowed.includes(session.profile.role)) {
+    if (path) {
+      const supabase = await createClient()
+      await supabase.rpc('log_access_denied', { p_path: path }) // best effort; the redirect happens either way
+    }
+    redirect('/dashboard?denied=1')
+  }
   return session
 }
 
+/** Admin and Encoder: may see and edit individual youth records. */
 export const canEdit = (role: Role) => role === 'admin' || role === 'encoder'
+export const STAFF: Role[] = ['admin', 'encoder']
+export const ALL_ROLES: Role[] = ['admin', 'encoder', 'viewer']

@@ -11,7 +11,7 @@ import NewActivity from './NewActivity'
 export const metadata = { title: 'Activities' }
 
 export default async function ActivitiesPage() {
-  const session = await requireRole(['admin', 'encoder', 'viewer'])
+  const session = await requireRole(['admin', 'encoder'], '/activities')
   const supabase = await createClient()
   const { data } = await supabase.from('activity_stats').select('*').order('activity_date', { ascending: false }).limit(200)
   const rows = (data ?? []) as ActivityStat[]

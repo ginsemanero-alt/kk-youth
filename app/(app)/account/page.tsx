@@ -6,7 +6,7 @@ export const metadata = { title: 'My account' }
 
 export default async function AccountPage() {
   // Role and name come from profiles (database), never from the client.
-  const session = await requireRole(['admin', 'encoder', 'viewer'])
+  const session = await requireRole(['admin', 'encoder', 'viewer'], '/account')
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Account" title="My account" subtitle="Your sign-in details and password." />

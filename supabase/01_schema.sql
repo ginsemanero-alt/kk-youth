@@ -372,18 +372,8 @@ select
 from public.youth y
 join public.puroks p on p.id = y.purok_id;
 
-create or replace view public.activity_stats with (security_invoker = true) as
-select
-  a.id, a.title, a.category, a.activity_date, a.venue, a.purok_id,
-  (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
-     where t.activity_id = a.id)::int as attendees,
-  (select count(*) from public.youth y where y.deleted_at is null)::int as total_youth,
-  case when (select count(*) from public.youth y where y.deleted_at is null) = 0 then 0
-       else round(100.0 * (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
-                           where t.activity_id = a.id)
-                  / (select count(*) from public.youth y where y.deleted_at is null), 1) end as participation_rate
-from public.activities a
-where a.deleted_at is null;
+-- activity_stats (attendance counts and participation rate per activity) is defined in
+-- 02_security.sql, because it checks the caller's role with get_user_role().
 
 -- Youth with no recorded attendance (optionally only counting events since a date).
 create or replace function public.unreached_youth(p_since date default null)
@@ -398,9 +388,16 @@ language sql stable as $$
   order by o.last_name, o.first_name
 $$;
 
--- Aggregates are computed in SQL, not in the browser.
+-- Aggregates are computed in SQL, not in the browser. Aggregate only, for every signed-in role
+-- (Viewers included): it runs with the owner's rights because Viewers cannot read individual
+-- youth rows, and it refuses callers without an active role.
 create or replace function public.dashboard_summary()
-returns jsonb language sql stable as $$
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v jsonb;
+begin
+  if public.get_user_role() is null then
+    raise exception 'Not allowed.' using errcode = 'insufficient_privilege';
+  end if;
   with y as (select * from public.youth_overview where deleted_at is null)
   select jsonb_build_object(
     'total',        (select count(*) from y),
@@ -428,5 +425,6 @@ returns jsonb language sql stable as $$
     'activities',   (select count(*) from public.activities where deleted_at is null),
     'avg_participation', (select coalesce(round(avg(participation_rate), 1), 0) from public.activity_stats),
     'unreached',    (select count(*) from public.unreached_youth(null))
-  )
-$$;
+  ) into v;
+  return v;
+end $$;

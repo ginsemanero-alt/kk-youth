@@ -7,7 +7,7 @@ import PurokManager from './PurokManager'
 export const metadata = { title: 'Puroks' }
 
 export default async function PuroksPage() {
-  await requireRole(['admin'])
+  await requireRole(['admin'], '/puroks')
   const supabase = await createClient()
   const [{ data: puroks }, { data: summary }] = await Promise.all([
     supabase.from('puroks').select('*').is('deleted_at', null).order('name'),

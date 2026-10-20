@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:db": "node supabase/tests/rls.test.mjs",
-    "sql:bundle": "node scripts/bundle-sql.mjs"
+    "sql:bundle": "node scripts/bundle-sql.mjs",
+    "test:routes": "node scripts/check-routes.mjs"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

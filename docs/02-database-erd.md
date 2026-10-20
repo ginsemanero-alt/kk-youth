@@ -1,6 +1,6 @@
 # Database design
 
-Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`, `07_user_management.sql`. Re-running a file means running every later file again, in order.
+Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`, `07_user_management.sql`, `08_viewer_aggregate_only.sql`. Re-running a file means running every later file again, in order.
 
 ## ERD
 
@@ -78,7 +78,7 @@ Added to both `youth` and `pending_registrations`: `email` (120, format checked)
 | Age and bracket | Not stored (they change). The `youth_overview` view computes them |
 | OSY flag and referrals | `is_osy` and `suggest_referrals()` in the view |
 | Skills normalized | Lowercased, trimmed, de-duplicated by trigger |
-| Aggregates | `dashboard_summary()`, `activity_stats` view, `unreached_youth()` (SQL, not client counting) |
+| Aggregates | `dashboard_summary()`, `activity_stats` view, `summary_report()` (SQL, not client counting; usable by Viewers, counts only, "<3" for 1 or 2) and `unreached_youth()` (names, Admin and Encoder only) |
 | Soft delete | `deleted_at`; RLS hides deleted rows from non-admins; no DELETE policy on youth |
 | Conditional fields | `clean_profile_extras` trigger: course only for college/vocational/post-graduate/doctorate, OSY reason only when out of school, sector and agency only when employed, "others" text only for civil status others, org name required when member, details only when yes |
 | Sensitive needs SPI consent | Same trigger: religion/disability/medical values need a consent version ending in `-SPI` |

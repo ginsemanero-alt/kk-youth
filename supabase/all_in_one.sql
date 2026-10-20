@@ -1,6 +1,6 @@
 -- =====================================================================
 -- KK Youth Profiling System  |  all_in_one.sql   (GENERATED, do not edit)
--- 01_schema.sql, 02_security.sql, 04_form_fields_extra.sql, 05_form_settings.sql, 06_custom_questions.sql, 07_user_management.sql in order, in one file.
+-- 01_schema.sql, 02_security.sql, 04_form_fields_extra.sql, 05_form_settings.sql, 06_custom_questions.sql, 07_user_management.sql, 08_viewer_aggregate_only.sql in order, in one file.
 -- Paste the whole file into Supabase Dashboard > SQL Editor and click Run.
 -- Safe to re-run. Sample puroks (03_seed.sql) are not included.
 -- Rebuild with: npm run sql:bundle
@@ -382,18 +382,8 @@ select
 from public.youth y
 join public.puroks p on p.id = y.purok_id;
 
-create or replace view public.activity_stats with (security_invoker = true) as
-select
-  a.id, a.title, a.category, a.activity_date, a.venue, a.purok_id,
-  (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
-     where t.activity_id = a.id)::int as attendees,
-  (select count(*) from public.youth y where y.deleted_at is null)::int as total_youth,
-  case when (select count(*) from public.youth y where y.deleted_at is null) = 0 then 0
-       else round(100.0 * (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
-                           where t.activity_id = a.id)
-                  / (select count(*) from public.youth y where y.deleted_at is null), 1) end as participation_rate
-from public.activities a
-where a.deleted_at is null;
+-- activity_stats (attendance counts and participation rate per activity) is defined in
+-- 02_security.sql, because it checks the caller's role with get_user_role().
 
 -- Youth with no recorded attendance (optionally only counting events since a date).
 create or replace function public.unreached_youth(p_since date default null)
@@ -408,9 +398,16 @@ language sql stable as $$
   order by o.last_name, o.first_name
 $$;
 
--- Aggregates are computed in SQL, not in the browser.
+-- Aggregates are computed in SQL, not in the browser. Aggregate only, for every signed-in role
+-- (Viewers included): it runs with the owner's rights because Viewers cannot read individual
+-- youth rows, and it refuses callers without an active role.
 create or replace function public.dashboard_summary()
-returns jsonb language sql stable as $$
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v jsonb;
+begin
+  if public.get_user_role() is null then
+    raise exception 'Not allowed.' using errcode = 'insufficient_privilege';
+  end if;
   with y as (select * from public.youth_overview where deleted_at is null)
   select jsonb_build_object(
     'total',        (select count(*) from y),
@@ -438,8 +435,9 @@ returns jsonb language sql stable as $$
     'activities',   (select count(*) from public.activities where deleted_at is null),
     'avg_participation', (select coalesce(round(avg(participation_rate), 1), 0) from public.activity_stats),
     'unreached',    (select count(*) from public.unreached_youth(null))
-  )
-$$;
+  ) into v;
+  return v;
+end $$;
 
 -- >>>>>>>>>>>>>>>>>>>> 02_security.sql <<<<<<<<<<<<<<<<<<<<
 
@@ -644,6 +642,25 @@ drop trigger if exists audit_logs_immutable on public.audit_logs;
 create trigger audit_logs_immutable before update or delete on public.audit_logs
   for each row execute function public.audit_block_mutation();
 
+-- ---------- Aggregate view: activity_stats ---------------------------
+-- Attendance counts and participation rate per activity (no names), for every signed-in role,
+-- Viewers included. It runs with the owner's rights because Viewers cannot read youth or
+-- attendance rows themselves (see the policies below), and it checks the caller's role itself.
+drop view if exists public.activity_stats cascade;
+create view public.activity_stats with (security_invoker = false, security_barrier = true) as
+select
+  a.id, a.title, a.category, a.activity_date, a.venue, a.purok_id,
+  (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
+     where t.activity_id = a.id)::int as attendees,
+  (select count(*) from public.youth y where y.deleted_at is null)::int as total_youth,
+  case when (select count(*) from public.youth y where y.deleted_at is null) = 0 then 0
+       else round(100.0 * (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
+                           where t.activity_id = a.id)
+                  / (select count(*) from public.youth y where y.deleted_at is null), 1) end as participation_rate
+from public.activities a
+where a.deleted_at is null
+  and (select public.get_user_role()) is not null;
+
 -- ---------- Table privileges (least privilege) -----------------------
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
@@ -716,8 +733,10 @@ create policy "puroks admin update" on public.puroks for update to authenticated
 
 -- youth
 drop policy if exists "youth read" on public.youth;
+-- Individual youth rows are for Admin and Encoder only. Viewers get aggregates through
+-- dashboard_summary(), activity_stats and summary_report() (08), never individual rows.
 create policy "youth read" on public.youth for select to authenticated
-  using ((select public.get_user_role()) is not null and (deleted_at is null or (select public.get_user_role()) = 'admin'));
+  using ((select public.get_user_role()) in ('admin', 'encoder') and (deleted_at is null or (select public.get_user_role()) = 'admin'));
 drop policy if exists "youth insert staff" on public.youth;
 create policy "youth insert staff" on public.youth for insert to authenticated
   with check ((select public.get_user_role()) in ('admin', 'encoder'));
@@ -744,8 +763,9 @@ create policy "activities update staff" on public.activities for update to authe
 
 -- attendance
 drop policy if exists "attendance read" on public.attendance;
+-- Who attended is individual data: Admin and Encoder only (Viewers see counts through activity_stats).
 create policy "attendance read" on public.attendance for select to authenticated
-  using ((select public.get_user_role()) is not null);
+  using ((select public.get_user_role()) in ('admin', 'encoder'));
 drop policy if exists "attendance insert staff" on public.attendance;
 create policy "attendance insert staff" on public.attendance for insert to authenticated
   with check ((select public.get_user_role()) in ('admin', 'encoder'));
@@ -1725,14 +1745,15 @@ revoke all on function public.filter_custom_answers(jsonb, boolean) from public,
 grant execute on function public.filter_custom_answers(jsonb, boolean) to authenticated;
 
 -- Runs with the owner's rights (API roles cannot read youth.custom_answers) and repeats the
--- row rules of the "youth read" policy. sensitive_answers is null for everyone but Admin and Encoder.
+-- row rules of the "youth read" policy: Admin and Encoder only. Viewers see answer counts
+-- through summary_report() (08_viewer_aggregate_only.sql), never individual answers.
 create or replace view public.youth_custom_answers with (security_barrier = true) as
 select y.id,
        public.filter_custom_answers(y.custom_answers, false) as answers,
        case when (select public.get_user_role()) in ('admin', 'encoder')
             then public.filter_custom_answers(y.custom_answers, true) end as sensitive_answers
 from public.youth y
-where (select public.get_user_role()) is not null
+where (select public.get_user_role()) in ('admin', 'encoder')
   and (y.deleted_at is null or (select public.get_user_role()) = 'admin');
 revoke all on public.youth_custom_answers from public, anon, authenticated;
 grant select on public.youth_custom_answers to authenticated;
@@ -1977,3 +1998,114 @@ begin
 end $$;
 revoke all on function public.log_user_admin_action(uuid, text) from public, anon;
 grant execute on function public.log_user_admin_action(uuid, text) to authenticated;
+
+-- >>>>>>>>>>>>>>>>>>>> 08_viewer_aggregate_only.sql <<<<<<<<<<<<<<<<<<<<
+
+-- =====================================================================
+-- KK Youth Profiling System  |  08_viewer_aggregate_only.sql
+-- Role-based access for the Viewer: aggregate statistics only.
+--   * summary_report(): counts by purok, age group, sex, education, work
+--     and the non-sensitive custom questions, for every signed-in role.
+--     For Viewers, counts of 1 or 2 are shown as "<3" so a small group
+--     cannot point to one person.
+--   * log_access_denied(): records when a signed-in user opens a page their
+--     role is not allowed to see.
+-- The policies that keep Viewers away from individual rows are in
+-- 02_security.sql ("youth read", "attendance read") and 06_custom_questions.sql
+-- (youth_custom_answers), where those objects are defined.
+-- Run EIGHTH (after 07_user_management.sql). Safe to re-run.
+-- =====================================================================
+
+-- ---------- Small-count suppression ----------------------------------
+-- Viewers get "<3" instead of 1 or 2. Admin and Encoder get the real number.
+create or replace function public.report_count(p_n bigint)
+returns jsonb language sql stable set search_path = public as $$
+  select case when p_n between 1 and 2 and public.get_user_role() = 'viewer' then to_jsonb('<3'::text) else to_jsonb(p_n) end
+$$;
+revoke all on function public.report_count(bigint) from public, anon;
+grant execute on function public.report_count(bigint) to authenticated;
+
+-- ---------- Summary report (aggregate only) --------------------------
+-- Active (not deleted) youth only. Optional filters: purok and age bracket.
+create or replace function public.summary_report(p_purok uuid default null, p_bracket text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v jsonb;
+begin
+  if public.get_user_role() is null then
+    raise exception 'Not allowed.' using errcode = 'insufficient_privilege';
+  end if;
+  if p_bracket is not null and p_bracket not in ('15-17', '18-24', '25-30') then
+    raise exception 'Unknown age bracket.';
+  end if;
+
+  with b as (
+    select y.*, p.name as purok_name, public.age_bracket(public.calc_age(y.birthdate)) as bracket
+    from public.youth y join public.puroks p on p.id = y.purok_id
+    where y.deleted_at is null
+      and (p_purok is null or y.purok_id = p_purok)
+      and (p_bracket is null or public.age_bracket(public.calc_age(y.birthdate)) = p_bracket)
+  ),
+  g as (   -- one row per (group, value) with its count
+    select 'sex' as grp, sex::text as k, count(*) as n from b group by 2
+    union all select 'age_bracket', bracket, count(*) from b group by 2
+    union all select 'purok', purok_name, count(*) from b group by 2
+    union all select 'education_status', education_status::text, count(*) from b group by 2
+    union all select 'education_level', education_level::text, count(*) from b group by 2
+    union all select 'employment_status', employment_status::text, count(*) from b group by 2
+    union all select 'civil_status', civil_status::text, count(*) from b group by 2
+    union all select 'registered_voter', case registered_voter when true then 'yes' when false then 'no' end, count(*) from b group by 2
+    union all select 'youth_org_member', case youth_org_member when true then 'yes' when false then 'no' end, count(*) from b group by 2
+    union all select 'osy_by_purok', purok_name, count(*) from b where education_status = 'out_of_school' group by 2
+    union all select 'osy_by_level', education_level::text, count(*) from b where education_status = 'out_of_school' group by 2
+    union all select 'osy_by_employment', employment_status::text, count(*) from b where education_status = 'out_of_school' group by 2
+  )
+  select jsonb_build_object(
+    'total', public.report_count((select count(*) from b)),
+    'osy',   public.report_count((select count(*) from b where education_status = 'out_of_school')),
+    'masked', public.get_user_role() = 'viewer',
+    'groups', (select coalesce(jsonb_object_agg(grp, items), '{}') from (
+                 select grp, jsonb_agg(jsonb_build_object('label', k, 'count', public.report_count(n)) order by n desc, k) as items
+                 from g group by grp) x),
+    -- Choose-one and yes/no questions that are active and not sensitive.
+    'questions', (select coalesce(jsonb_agg(jsonb_build_object(
+                     'id', q.id, 'label', q.label, 'type', q.question_type,
+                     'counts', (select coalesce(jsonb_agg(jsonb_build_object('label', a, 'count', public.report_count(n)) order by n desc, a), '[]')
+                                from (select coalesce(case when q.question_type = 'yes_no'
+                                                           then case b.custom_answers ->> q.id::text when 'true' then 'Yes' when 'false' then 'No' end
+                                                           else b.custom_answers ->> q.id::text end, 'Not answered') as a,
+                                             count(*) as n
+                                      from b group by 1) z)
+                   ) order by q.sort_order, q.created_at), '[]')
+                  from public.custom_questions q
+                  where q.is_active and not q.is_sensitive and q.question_type in ('single_choice', 'yes_no'))
+  ) into v;
+  return v;
+end $$;
+revoke all on function public.summary_report(uuid, text) from public, anon;
+grant execute on function public.summary_report(uuid, text) to authenticated;
+
+-- ---------- Denied page access in the audit log ----------------------
+-- Adds 'denied' to the allowed audit actions (the check from 01_schema.sql plus 'denied').
+alter table public.audit_logs drop constraint if exists audit_logs_action_check;
+alter table public.audit_logs add constraint audit_logs_action_check
+  check (action in ('insert', 'update', 'delete', 'restore', 'view', 'export', 'approve', 'reject', 'purge', 'denied'));
+
+-- Called by the server when a signed-in user opens a page their role may not see. At most one
+-- entry per user and page per minute, so the log cannot be flooded. Records only the page path
+-- and the role, nothing else.
+create or replace function public.log_access_denied(p_path text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_role public.app_role; v_name text; v_path text := left(coalesce(p_path, ''), 120);
+begin
+  if auth.uid() is null then raise exception 'Not allowed.' using errcode = 'insufficient_privilege'; end if;
+  if exists (select 1 from public.audit_logs
+             where actor_id = auth.uid() and action = 'denied' and detail ->> 'path' = v_path
+               and created_at > now() - interval '1 minute') then
+    return;
+  end if;
+  select role, full_name into v_role, v_name from public.profiles where id = auth.uid();
+  insert into public.audit_logs (actor_id, actor_name, action, table_name, detail)
+  values (auth.uid(), v_name, 'denied', 'route', jsonb_build_object('path', v_path, 'role', v_role));
+end $$;
+revoke all on function public.log_access_denied(text) from public, anon;
+grant execute on function public.log_access_denied(text) to authenticated;

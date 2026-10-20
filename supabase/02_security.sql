@@ -199,6 +199,25 @@ drop trigger if exists audit_logs_immutable on public.audit_logs;
 create trigger audit_logs_immutable before update or delete on public.audit_logs
   for each row execute function public.audit_block_mutation();
 
+-- ---------- Aggregate view: activity_stats ---------------------------
+-- Attendance counts and participation rate per activity (no names), for every signed-in role,
+-- Viewers included. It runs with the owner's rights because Viewers cannot read youth or
+-- attendance rows themselves (see the policies below), and it checks the caller's role itself.
+drop view if exists public.activity_stats cascade;
+create view public.activity_stats with (security_invoker = false, security_barrier = true) as
+select
+  a.id, a.title, a.category, a.activity_date, a.venue, a.purok_id,
+  (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
+     where t.activity_id = a.id)::int as attendees,
+  (select count(*) from public.youth y where y.deleted_at is null)::int as total_youth,
+  case when (select count(*) from public.youth y where y.deleted_at is null) = 0 then 0
+       else round(100.0 * (select count(*) from public.attendance t join public.youth y on y.id = t.youth_id and y.deleted_at is null
+                           where t.activity_id = a.id)
+                  / (select count(*) from public.youth y where y.deleted_at is null), 1) end as participation_rate
+from public.activities a
+where a.deleted_at is null
+  and (select public.get_user_role()) is not null;
+
 -- ---------- Table privileges (least privilege) -----------------------
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
@@ -271,8 +290,10 @@ create policy "puroks admin update" on public.puroks for update to authenticated
 
 -- youth
 drop policy if exists "youth read" on public.youth;
+-- Individual youth rows are for Admin and Encoder only. Viewers get aggregates through
+-- dashboard_summary(), activity_stats and summary_report() (08), never individual rows.
 create policy "youth read" on public.youth for select to authenticated
-  using ((select public.get_user_role()) is not null and (deleted_at is null or (select public.get_user_role()) = 'admin'));
+  using ((select public.get_user_role()) in ('admin', 'encoder') and (deleted_at is null or (select public.get_user_role()) = 'admin'));
 drop policy if exists "youth insert staff" on public.youth;
 create policy "youth insert staff" on public.youth for insert to authenticated
   with check ((select public.get_user_role()) in ('admin', 'encoder'));
@@ -299,8 +320,9 @@ create policy "activities update staff" on public.activities for update to authe
 
 -- attendance
 drop policy if exists "attendance read" on public.attendance;
+-- Who attended is individual data: Admin and Encoder only (Viewers see counts through activity_stats).
 create policy "attendance read" on public.attendance for select to authenticated
-  using ((select public.get_user_role()) is not null);
+  using ((select public.get_user_role()) in ('admin', 'encoder'));
 drop policy if exists "attendance insert staff" on public.attendance;
 create policy "attendance insert staff" on public.attendance for insert to authenticated
   with check ((select public.get_user_role()) in ('admin', 'encoder'));

@@ -16,7 +16,7 @@ const WINDOWS = [
 ]
 
 export default async function UnreachedPage({ searchParams }: { searchParams: Promise<{ w?: string }> }) {
-  await requireRole(['admin', 'encoder', 'viewer'])
+  await requireRole(['admin', 'encoder'], '/activities/unreached')
   const { w } = await searchParams
   const win = WINDOWS.find((x) => x.key === w) ?? WINDOWS[0]
   let since: string | null = null

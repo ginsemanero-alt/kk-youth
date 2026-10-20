@@ -14,7 +14,7 @@ export const metadata = { title: 'Registrations' }
 export const dynamic = 'force-dynamic'
 
 export default async function RegistrationsPage() {
-  await requireRole(['admin', 'encoder'])
+  await requireRole(['admin', 'encoder'], '/registrations')
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('pending_registrations')
