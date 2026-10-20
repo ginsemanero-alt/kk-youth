@@ -95,14 +95,15 @@ export default async function YouthListPage({ searchParams }: { searchParams: Pr
               <thead>
                 <tr className="border-b border-slate-100 text-xs font-black uppercase tracking-widest text-slate-400">
                   <th className="px-8 py-5">Name</th><th className="px-4 py-5">Age</th><th className="px-4 py-5">Purok</th>
-                  <th className="px-4 py-5">Education</th><th className="px-8 py-5">Employment</th>
+                  <th className="px-4 py-5">Education</th><th className="px-4 py-5">Employment</th><th className="px-8 py-5"><span className="sr-only">Open</span></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((y) => (
-                  <tr key={y.id} className="border-b border-slate-50 transition last:border-0 hover:bg-brand-soft/40">
+                  // The name link stretches over the whole row (after:inset-0), so a click anywhere opens the profile.
+                  <tr key={y.id} className="group relative cursor-pointer border-b border-slate-50 transition last:border-0 hover:bg-brand-soft/40">
                     <td className="px-8 py-4">
-                      <Link href={`/youth/${y.id}`} className="font-black hover:text-brand">{y.last_name}, {y.first_name}</Link>
+                      <Link href={`/youth/${y.id}`} className="font-black after:absolute after:inset-0 after:content-[''] group-hover:text-brand focus-visible:outline-none focus-visible:after:rounded-2xl focus-visible:after:ring-4 focus-visible:after:ring-brand/30">{y.last_name}, {y.first_name}</Link>
                       <div className="text-xs font-bold text-slate-400">{y.youth_code}</div>
                     </td>
                     <td className="px-4 py-4 font-bold">{y.age} <span className="text-xs text-slate-400">({y.sex === 'male' ? 'M' : 'F'})</span></td>
@@ -113,7 +114,12 @@ export default async function YouthListPage({ searchParams }: { searchParams: Pr
                         {y.education_level && <span className="text-xs font-bold text-slate-500">{label(EDU_LEVEL_OPTIONS, y.education_level)}</span>}
                       </div>
                     </td>
-                    <td className="px-8 py-4"><EmploymentBadge status={y.employment_status} /></td>
+                    <td className="px-4 py-4"><EmploymentBadge status={y.employment_status} /></td>
+                    <td className="px-8 py-4 text-right">
+                      <span className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black text-slate-400 transition group-hover:bg-brand group-hover:text-white">
+                        View <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden />
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
