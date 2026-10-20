@@ -49,7 +49,7 @@ Push to GitHub, import the repo in Vercel, add the four environment variables, d
 - **Rate limiting**: before a public launch, put a CAPTCHA (Cloudflare Turnstile or Supabase CAPTCHA) in front of the self-registration form.
 - **Imports** are marked with consent source "import". The importing user confirms that signed consent forms are on file; under-18 rows need a guardian name.
 - Exports never include contact numbers or email addresses. Religion, disability, medical and sensitive question answers are exported only when an Admin ticks "Include sensitive information" on the Reports page (the read is logged).
-- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (161 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
+- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (188 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
 
 ## Form settings (Admin)
 

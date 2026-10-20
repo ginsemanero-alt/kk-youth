@@ -470,6 +470,44 @@ try {
   r = await asUser(id.enc, yIns('QAfter', { [qShirt.id]: 'XXL' }))
   ok('deactivated question is not required and its answer is dropped', (await q(`select custom_answers a from youth where id='${r.rows[0].id}'`))[0].a[qShirt.id] === undefined)
 
+  // ===== Role matrix: what each of the three users can and cannot do =====
+  // Viewer: read-only
+  ok('viewer can read active youth', (await asUser(id.view, `select id from youth_overview where id='${y1.id}'`)).rows.length === 1)
+  ok('viewer cannot edit youth (0 rows)', (await asUser(id.view, `update youth set civil_status='married' where id='${y1.id}' returning id`)).rows.length === 0)
+  ok('viewer cannot read registrations', (await asUser(id.view, `select id from pending_registrations`)).rows.length === 0)
+  e = await err(id.view, `select reject_registration('${p2.id}', 'x')`)
+  ok('viewer cannot reject a registration', e && e.includes('Not allowed'), e)
+  e = await err(id.view, `insert into activities (title, category, activity_date) values ('Viewer event','sports', current_date)`)
+  ok('viewer cannot create activities', e && /row-level security/.test(e), e)
+  ok('viewer cannot edit activities (0 rows)', (await asUser(id.view, `update activities set title='x' where id='${act.id}' returning id`)).rows.length === 0)
+  ok('viewer cannot remove attendance (0 rows)', (await asUser(id.view, `delete from attendance where activity_id='${act.id}' returning id`)).rows.length === 0)
+  ok('viewer cannot read audit logs', (await asUser(id.view, `select id from audit_logs`)).rows.length === 0)
+  ok('viewer cannot edit puroks (0 rows)', (await asUser(id.view, `update puroks set description='x' where id='${purok}' returning id`)).rows.length === 0)
+  e = await err(id.view, `select purge_soft_deleted(365)`)
+  ok('viewer cannot purge', e && e.includes('Only an Admin'), e)
+  ok('viewer can read activities and stats', (await asUser(id.view, `select id from activity_stats`)).rows.length >= 1)
+  await asUser(id.view, `select log_event('export', 'youth_overview', '{"format":"xlsx"}'::jsonb)`)
+  ok('viewer can export (and it is logged)', (await q(`select count(*)::int c from audit_logs where action='export' and actor_id='${id.view}'`))[0].c === 1)
+
+  // Encoder: manages youth, registrations and activities, not the system settings
+  ok('encoder can edit youth', (await asUser(id.enc, `update youth set civil_status='single' where id='${y1.id}' returning id`)).rows.length === 1)
+  ok('encoder can edit activities', (await asUser(id.enc, `update activities set venue='Covered court' where id='${act.id}' returning id`)).rows.length === 1)
+  ok('encoder can remove attendance', (await asUser(id.enc, `delete from attendance where activity_id='${act.id}' and youth_id='${y1.id}' returning id`)).rows.length === 1)
+  ok('encoder can read registrations', (await asUser(id.enc, `select id from pending_registrations`)).rows.length >= 1)
+  ok('encoder cannot edit puroks (0 rows)', (await asUser(id.enc, `update puroks set description='x' where id='${purok}' returning id`)).rows.length === 0)
+  ok('encoder cannot change user roles (0 rows)', (await asUser(id.enc, `update profiles set role='admin' where id='${id.view}' returning id`)).rows.length === 0)
+  ok('encoder cannot promote self (0 rows)', (await asUser(id.enc, `update profiles set role='admin' where id='${id.enc}' returning id`)).rows.length === 0)
+  ok('encoder cannot edit custom questions (0 rows)', (await asUser(id.enc, `update custom_questions set label='x' returning id`)).rows.length === 0)
+  ok('encoder still an encoder', (await q(`select role from profiles where id='${id.enc}'`))[0].role === 'encoder')
+
+  // Admin: everything above plus users, puroks, settings, audit
+  ok('admin can edit puroks', (await asUser(id.admin, `update puroks set description='Updated by admin' where id='${purok}' returning id`)).rows.length === 1)
+  ok('admin can create puroks', (await asUser(id.admin, `insert into puroks (name) values ('Purok 9') returning id`)).rows.length === 1)
+  ok('admin can deactivate a user', (await asUser(id.admin, `update profiles set is_active=false where id='${id.view}' returning id`)).rows.length === 1)
+  ok('deactivated viewer sees nothing', (await asUser(id.view, `select id from youth_overview`)).rows.length === 0)
+  await asUser(id.admin, `update profiles set is_active=true where id='${id.view}'`)
+  ok('admin can reactivate a user', (await asUser(id.view, `select id from youth_overview`)).rows.length > 0)
+
   // inactive user loses all access
   await db.exec(`update profiles set is_active=false where id='${id.enc2}'`)
   e = await err(id.enc2, mk({ first_name: 'Blocked', last_name: 'User' }))
