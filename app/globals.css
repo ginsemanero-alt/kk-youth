@@ -95,4 +95,8 @@ body {
   thead { display: table-header-group; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; animation: none !important; }
   .reveal { opacity: 1; transform: none; }
+  /* Registration QR poster: print only the poster, nothing else on the page. */
+  body.printing-qr > *:not(.qr-poster) { display: none !important; }
+  body.printing-qr > .qr-poster { display: block; padding-top: 10mm; }
 }
+.qr-poster { display: none; }

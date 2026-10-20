@@ -3,7 +3,13 @@ import logo from '@/assets/sk-logo-round.png'
 import { ORG } from '@/lib/constants'
 
 /** The SK Barangay Bubog seal, always round with a white ring so it reads on dark and light backgrounds. */
-export function Logo({ size = 44, className = '', preload = false }: { size?: number; className?: string; preload?: boolean }) {
+export function Logo({ size = 44, className = '', preload = false, eager = false }: {
+  size?: number
+  className?: string
+  preload?: boolean
+  /** Load right away even while hidden (for print-only content). */
+  eager?: boolean
+}) {
   return (
     <Image
       src={logo}
@@ -11,6 +17,7 @@ export function Logo({ size = 44, className = '', preload = false }: { size?: nu
       width={size}
       height={size}
       preload={preload}
+      loading={eager ? 'eager' : undefined}
       className={`shrink-0 rounded-full bg-white shadow-md ring-2 ring-white ${className}`}
     />
   )
