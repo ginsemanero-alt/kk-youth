@@ -118,6 +118,22 @@ create trigger purok_delete_guard before update on public.puroks
   for each row execute function public.guard_purok_delete();
 
 -- ---------- Audit trail (filled by triggers, append-only) ------------
+-- Sensitive personal information (religion, disability, medical; columns
+-- added by 04_form_fields_extra.sql) is never written to the log: the log
+-- only says that such a field was set or changed.
+create or replace function public.audit_mask(p_data jsonb, p_marker text)
+returns jsonb language plpgsql immutable as $$
+declare k text;
+begin
+  if p_data is null then return null; end if;
+  foreach k in array array['religion', 'has_disability', 'disability_details', 'has_medical_condition', 'medical_details'] loop
+    if p_data ? k and p_data -> k <> 'null'::jsonb then
+      p_data := jsonb_set(p_data, array[k], to_jsonb(p_marker));
+    end if;
+  end loop;
+  return p_data;
+end $$;
+
 create or replace function public.audit_row()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
@@ -141,8 +157,11 @@ begin
     end if;
     v_old := v_changed_old; v_new := v_changed_new;
   end if;
+  v_old := public.audit_mask(v_old, '[sensitive]');
+  v_new := public.audit_mask(v_new, case when tg_op = 'UPDATE' then '[sensitive: changed]' else '[sensitive]' end);
 
-  v_id := coalesce((coalesce(to_jsonb(new), to_jsonb(old))) ->> 'id', (coalesce(to_jsonb(new), to_jsonb(old))) ->> 'youth_id');
+  v_id := coalesce((coalesce(to_jsonb(new), to_jsonb(old))) ->> 'id', (coalesce(to_jsonb(new), to_jsonb(old))) ->> 'youth_id',
+                   (coalesce(to_jsonb(new), to_jsonb(old))) ->> 'field_key');
   select full_name into v_name from public.profiles where id = auth.uid();
 
   insert into public.audit_logs (actor_id, actor_name, action, table_name, record_id, old_data, new_data)
@@ -180,7 +199,7 @@ grant insert on public.pending_registrations to anon;            -- insert only,
 grant select, insert, update on public.puroks to authenticated;
 grant select on public.profiles to authenticated;
 grant update (full_name, role, is_active) on public.profiles to authenticated;
-grant select, insert, update on public.youth to authenticated;
+grant insert, update on public.youth to authenticated;          -- SELECT is column-level, see below
 grant select, insert, update on public.activities to authenticated;
 grant select, insert, delete on public.attendance to authenticated;
 grant select, update on public.pending_registrations to authenticated;
@@ -189,6 +208,25 @@ grant select on public.youth_overview, public.activity_stats to authenticated;
 grant select on public.settings_note to authenticated;
 grant usage on sequence public.youth_code_seq to authenticated;
 -- youth_contacts: no direct grants. Only the secure RPCs below touch it.
+
+-- youth SELECT is granted per column so the sensitive columns (added by
+-- 04_form_fields_extra.sql) stay unreadable for every API role, including
+-- Viewers. Admin and Encoder read them through the youth_sensitive view.
+-- Later SQL files call this again after they add columns.
+create or replace function private.grant_youth_select()
+returns void language plpgsql as $$
+declare v_cols text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into v_cols
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'youth'
+    and column_name not in ('religion', 'has_disability', 'disability_details', 'has_medical_condition', 'medical_details',
+                            'custom_answers');
+  execute 'revoke select on public.youth from authenticated';
+  execute format('grant select (%s) on public.youth to authenticated', v_cols);
+end $$;
+revoke all on function private.grant_youth_select() from public;
+select private.grant_youth_select();
 
 -- ---------- Row Level Security ---------------------------------------
 alter table public.profiles              enable row level security;

@@ -1,12 +1,27 @@
-import type { CivilStatus, EducationLevel, EducationStatus, EmploymentStatus, Role, Sex } from './types'
+import type { CivilStatus, EducationLevel, EducationStatus, EmploymentSector, EmploymentStatus, Role, Sex } from './types'
 
-export const CONSENT_VERSION = 'KK-CONSENT-v1.0'
+/**
+ * Consent versions. v1.1 follows the paper SK Youth Profile Form. When the Admin shows any
+ * sensitive field (religion, disability, medical), the form uses the -SPI version, which adds
+ * CONSENT_SPI_TEXT. Old records keep the version they were saved with. The database requires
+ * a version ending in -SPI before it stores sensitive information.
+ * DRAFT WORDING: have the barangay legal officer or Data Protection Officer review it before use.
+ */
+export const CONSENT_VERSION = 'KK-CONSENT-v1.1'
+export const CONSENT_VERSION_SPI = 'KK-CONSENT-v1.1-SPI'
+export const consentVersionFor = (sensitiveShown: boolean) => (sensitiveShown ? CONSENT_VERSION_SPI : CONSENT_VERSION)
 
 export const CONSENT_TEXT = [
-  'I allow the Sangguniang Kabataan (SK) of this barangay to collect and process my personal information for youth profiling, planning of programs (including the Comprehensive Barangay Youth Development Plan), and SK reports.',
-  'I understand that only the information needed for these purposes is collected, that it is stored securely, that only authorized SK officers and encoders can access it, and that my contact number is stored in encrypted form.',
-  'I understand that I may ask to view, correct or delete my information at any time by contacting the SK, in line with the Data Privacy Act of 2012 (Republic Act No. 10173).',
+  'I allow the Sangguniang Kabataan (SK) of this barangay to collect, process, use and keep the personal information in this form for the profiling of the Katipunan ng Kabataan (KK), as provided by Republic Act No. 10742 (Sangguniang Kabataan Reform Act of 2015), and for planning SK programs and reports.',
+  'I understand that my information will be handled in line with Republic Act No. 10173 (Data Privacy Act of 2012): only what is needed is collected, it is stored securely, only authorized SK officers and encoders can access it, and my contact number is stored in encrypted form.',
+  'I understand that the information I give will not be used as evidence against me in any legal proceeding.',
+  'I understand that I may ask to view, correct or delete my information, or withdraw this consent, at any time by contacting the SK.',
 ]
+
+export const CONSENT_SPI_TEXT =
+  'This form also asks for sensitive personal information (religion, disability or medical condition). Answering these is voluntary. If I answer, I allow the SK to process this information only to plan programs and services for the youth; it is shown only to the SK Admin and encoders, never to viewers, and it is not included in reports unless an Admin prepares them.'
+
+export const consentTextFor = (sensitiveShown: boolean) => (sensitiveShown ? [...CONSENT_TEXT, CONSENT_SPI_TEXT] : CONSENT_TEXT)
 
 export const GUARDIAN_CONSENT_TEXT =
   'As the parent or guardian of the youth named above, who is below 18 years old, I give my consent to the collection and processing of their personal information for the purposes stated above.'
@@ -22,6 +37,7 @@ export const CIVIL_OPTIONS: { value: CivilStatus; label: string }[] = [
   { value: 'live_in', label: 'Live-in' },
   { value: 'separated', label: 'Separated' },
   { value: 'widowed', label: 'Widowed' },
+  { value: 'others', label: 'Others (please specify)' },
 ]
 
 export const EDU_STATUS_OPTIONS: { value: EducationStatus; label: string }[] = [
@@ -34,17 +50,35 @@ export const EDU_LEVEL_OPTIONS: { value: EducationLevel; label: string }[] = [
   { value: 'elementary', label: 'Elementary' },
   { value: 'junior_high', label: 'Junior High School' },
   { value: 'senior_high', label: 'Senior High School' },
-  { value: 'alternative_learning', label: 'Alternative Learning System' },
-  { value: 'vocational', label: 'Vocational / Technical' },
+  { value: 'alternative_learning', label: 'Alternative Learning System (ALS)' },
   { value: 'college', label: 'College' },
-  { value: 'postgraduate', label: 'Postgraduate' },
+  { value: 'vocational', label: 'Vocational / Technical' },
+  { value: 'postgraduate', label: 'Post-Graduate (Masteral)' },
+  { value: 'doctorate', label: 'Doctorate' },
 ]
+
+/** Levels that have a course or program. Keep in sync with form_field_applies() in 05_form_settings.sql. */
+export const LEVELS_WITH_COURSE: EducationLevel[] = ['college', 'vocational', 'postgraduate', 'doctorate']
 
 export const EMPLOYMENT_OPTIONS: { value: EmploymentStatus; label: string }[] = [
   { value: 'employed', label: 'Employed' },
   { value: 'self_employed', label: 'Self-employed' },
   { value: 'unemployed', label: 'Unemployed' },
 ]
+
+export const SECTOR_OPTIONS: { value: EmploymentSector; label: string }[] = [
+  { value: 'government', label: 'Government' },
+  { value: 'private', label: 'Private' },
+  { value: 'self_employed', label: 'Self-employed / own business' },
+]
+
+export const YES_NO_OPTIONS = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'no', label: 'No' },
+]
+
+/** true -> Yes, false -> No, null -> '' */
+export const yesNo = (b: boolean | null | undefined) => (b === true ? 'Yes' : b === false ? 'No' : '')
 
 export const ROLE_OPTIONS: { value: Role; label: string; hint: string }[] = [
   { value: 'admin', label: 'Admin', hint: 'Full access, users, audit logs' },

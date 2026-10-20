@@ -1,0 +1,31 @@
+import { requireRole } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import type { FormFieldSetting } from '@/lib/types'
+import { Alert, PageHeader } from '@/components/ui'
+import FormSettingsManager from './FormSettingsManager'
+
+export const metadata = { title: 'Form settings' }
+export const dynamic = 'force-dynamic'
+
+export default async function FormSettingsPage() {
+  await requireRole(['admin'])
+  const supabase = await createClient()
+  const [{ data, error }, { data: puroks }] = await Promise.all([
+    supabase.from('form_fields').select('*').order('sort_order'),
+    supabase.from('puroks').select('id, name').is('deleted_at', null).order('name'),
+  ])
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Setup"
+        title="Form settings"
+        subtitle="Choose which details the self-registration form, the encoder form and the Excel import ask for. Name, birthdate, sex, purok and educational status are always asked. Changes do not alter records that are already saved."
+      />
+      {error || !data?.length ? (
+        <Alert>Form settings are not set up yet. Run supabase/04_form_fields_extra.sql and supabase/05_form_settings.sql in the Supabase SQL Editor.</Alert>
+      ) : (
+        <FormSettingsManager initial={data as FormFieldSetting[]} puroks={puroks ?? []} />
+      )}
+    </div>
+  )
+}

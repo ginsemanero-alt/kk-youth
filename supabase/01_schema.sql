@@ -350,7 +350,11 @@ create trigger pending_prepare before insert on public.pending_registrations
   for each row execute function public.prepare_pending_registration();
 
 -- ---------- Views (security_invoker => RLS of the caller applies) ----
-create or replace view public.youth_overview with (security_invoker = true) as
+-- Dropped first because 04_form_fields_extra.sql adds columns to this view
+-- (a plain "create or replace" cannot remove them again). unreached_youth()
+-- is recreated below; run 02 and 04 to 06 again after re-running this file.
+drop view if exists public.youth_overview cascade;
+create view public.youth_overview with (security_invoker = true) as
 select
   y.id, y.youth_code, y.first_name, y.middle_name, y.last_name, y.suffix,
   concat_ws(' ', y.first_name, nullif(left(y.middle_name, 1) || '.', '.'), y.last_name, y.suffix) as full_name,

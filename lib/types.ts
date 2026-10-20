@@ -1,10 +1,11 @@
 export type Role = 'admin' | 'encoder' | 'viewer'
 export type Sex = 'male' | 'female'
-export type CivilStatus = 'single' | 'married' | 'widowed' | 'separated' | 'live_in'
+export type CivilStatus = 'single' | 'married' | 'widowed' | 'separated' | 'live_in' | 'others'
 export type EducationStatus = 'in_school' | 'out_of_school' | 'graduated'
 export type EducationLevel =
-  | 'elementary' | 'junior_high' | 'senior_high' | 'alternative_learning' | 'vocational' | 'college' | 'postgraduate'
+  | 'elementary' | 'junior_high' | 'senior_high' | 'alternative_learning' | 'vocational' | 'college' | 'postgraduate' | 'doctorate'
 export type EmploymentStatus = 'employed' | 'self_employed' | 'unemployed'
+export type EmploymentSector = 'government' | 'private' | 'self_employed'
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected'
 
 export interface Purok {
@@ -27,12 +28,12 @@ export interface YouthOverview {
   age: number
   age_bracket: string
   sex: Sex
-  civil_status: CivilStatus
+  civil_status: CivilStatus | null
   purok_id: string
   purok_name: string
   education_status: EducationStatus
   education_level: EducationLevel | null
-  employment_status: EmploymentStatus
+  employment_status: EmploymentStatus | null
   skills: string[]
   interests: string[]
   civic_involvement: string[]
@@ -48,6 +49,37 @@ export interface YouthOverview {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  email: string | null
+  registered_voter: boolean | null
+  civil_status_other: string | null
+  course: string | null
+  out_of_school_reason: string | null
+  employment_sector: EmploymentSector | null
+  employment_duration: string | null
+  government_agency: string | null
+  youth_org_member: boolean | null
+  youth_org_name: string | null
+}
+
+/** Religion, disability and medical fields: Admin and Encoder only (youth_sensitive view). */
+export interface YouthSensitive {
+  id: string
+  religion: string | null
+  has_disability: boolean | null
+  disability_details: string | null
+  has_medical_condition: boolean | null
+  medical_details: string | null
+}
+
+export interface FormFieldSetting {
+  field_key: string
+  label: string
+  section: 'personal' | 'other'
+  is_visible: boolean
+  is_required: boolean
+  is_sensitive: boolean
+  sort_order: number
+  depends_on: string | null
 }
 
 export interface Activity {
@@ -74,14 +106,29 @@ export interface PendingRegistration {
   suffix: string | null
   birthdate: string
   sex: Sex
-  civil_status: CivilStatus
+  civil_status: CivilStatus | null
   purok_id: string
   education_status: EducationStatus
   education_level: EducationLevel | null
-  employment_status: EmploymentStatus
+  employment_status: EmploymentStatus | null
   skills: string[]
   interests: string[]
   civic_involvement: string[]
+  email: string | null
+  registered_voter: boolean | null
+  civil_status_other: string | null
+  course: string | null
+  out_of_school_reason: string | null
+  employment_sector: EmploymentSector | null
+  employment_duration: string | null
+  government_agency: string | null
+  youth_org_member: boolean | null
+  youth_org_name: string | null
+  religion: string | null
+  has_disability: boolean | null
+  disability_details: string | null
+  has_medical_condition: boolean | null
+  medical_details: string | null
   consent_version: string
   consent_at: string
   guardian_name: string | null

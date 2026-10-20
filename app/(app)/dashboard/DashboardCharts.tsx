@@ -78,7 +78,7 @@ export default function DashboardCharts({ data }: { data: DashboardSummary }) {
       </ChartCard>
 
       <ChartCard title="Employment">
-        <Donut data={data.employment.map((e) => ({ name: EMP[e.label]?.label ?? e.label, value: e.count, color: EMP[e.label]?.color ?? '#94a3b8' }))} />
+        <Donut data={data.employment.map((e) => ({ name: EMP[e.label]?.label ?? e.label ?? 'Not specified', value: e.count, color: EMP[e.label]?.color ?? '#94a3b8' }))} />
       </ChartCard>
 
       <ChartCard title="Youth per purok">

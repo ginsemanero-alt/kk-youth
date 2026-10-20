@@ -10,7 +10,9 @@ Roles live in `public.profiles.role`. `get_user_role()` (SECURITY DEFINER) retur
 |---|---|---|---|---|
 | profiles | none | own row | own row | all; update role, status, name |
 | puroks | read active | read | read | read, add, edit, soft delete |
-| youth | none | read active | read, add, edit | read incl. deleted, add, edit, soft delete and restore |
+| youth | none | read active (no sensitive columns) | read, add, edit | read incl. deleted, add, edit, soft delete and restore |
+| youth_sensitive (view) | none | no rows | read active | read incl. deleted |
+| form_fields | read | read | read | read; update show/required only |
 | youth_contacts | none | none | via RPC only | via RPC only |
 | activities | none | read | read, add, edit | same as encoder |
 | attendance | none | read | read, add, remove | same |
@@ -19,6 +21,22 @@ Roles live in `public.profiles.role`. `get_user_role()` (SECURITY DEFINER) retur
 | storage consent-scans | none | none | read, upload | read, upload, delete |
 
 No table is left without a policy: `youth_contacts` has an explicit deny-all policy, and `02_security.sql` ends with a check that fails if any public table lacks RLS or a policy.
+
+## Sensitive personal information
+
+Religion, disability and medical fields (added by `04_form_fields_extra.sql`) are sensitive personal information under the Data Privacy Act. Rules, all in the database:
+
+- **Not readable by Viewers.** SELECT on `youth` is granted per column (`private.grant_youth_select()`), leaving out the sensitive columns for every API role. Admin and Encoder read them through the `youth_sensitive` view, which returns no rows to anyone else. `youth_overview` (used by Viewers, dashboards and exports) does not contain them. Viewers cannot read `pending_registrations` at all.
+- **Exported only by an Admin.** `get_youth_sensitive_bulk()` refuses every role except Admin and logs the read (row count only).
+- **Never in the audit log.** `audit_row()` replaces the values with `[sensitive]` (insert) or `[sensitive: changed]` (update).
+- **Consent.** Values are refused unless the record's consent version ends in `-SPI`, the version whose text explains the sensitive fields.
+- **Off by default.** The three fields are hidden and not required in `form_fields` until an Admin turns them on.
+
+Changed existing logic, and why: `youth` SELECT went from table-level to column-level (needed so Viewers cannot read the sensitive columns; Viewer and Encoder share the same database role, so this cannot be done with a role-specific grant). `audit_row()` masks the sensitive keys and uses `field_key` as the record id for `form_fields`. `approve_registration()` and `import_youth()` copy the new columns. RLS policies, encryption and the other audit rules are unchanged.
+
+## Form settings
+
+`form_fields`: anon and authenticated may SELECT (the public form needs it). Only an Admin may UPDATE, and only the `is_visible` and `is_required` columns (column grant). Insert and delete have explicit deny policies and no grants. Every change is audited with `audit_row()`. The settings are enforced by `apply_form_settings()` on `youth` and `pending_registrations`, so a client that skips the form cannot store a hidden field or skip a required one.
 
 ## Encryption
 
@@ -44,4 +62,4 @@ Soft-deleted youth are kept 365 days, then an Admin runs `purge_soft_deleted()` 
 
 ## Tests
 
-`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 76 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies. Run: `npm i -D @electric-sql/pglite` then `node supabase/tests/rls.test.mjs`.
+`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 121 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged). It applies 01 to 05 twice in order to prove they can be re-run. Run: `npm run test:db`.

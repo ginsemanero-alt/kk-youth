@@ -1,12 +1,14 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { exportWorkbook, readFirstSheet, type Row } from '@/lib/export'
 import { friendlyError } from '@/lib/errors'
 import { useToast } from '@/components/Toast'
 import { ageOn, toList } from '@/lib/format'
-import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, EDU_STATUS_OPTIONS, EMPLOYMENT_OPTIONS, SEX_OPTIONS } from '@/lib/constants'
+import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, EDU_STATUS_OPTIONS, EMPLOYMENT_OPTIONS, SECTOR_OPTIONS, SEX_OPTIONS } from '@/lib/constants'
+import { anySensitiveShown, fieldApplies, required, shown, toRules, type FormRules } from '@/lib/formSettings'
+import type { FormFieldSetting } from '@/lib/types'
 import { Alert, Card, SectionTitle, StatCard, btnDark, btnGhost, btnPrimary } from '@/components/ui'
 
 const MAX_ROWS = 2000
@@ -25,6 +27,15 @@ function pickEnum(raw: unknown, options: { value: string; label: string }[], ext
   return hit ? hit.value : null
 }
 
+/** '' when blank, 'yes' / 'no', or null when not recognized. */
+function pickYesNo(raw: unknown): string | null {
+  const n = norm(raw)
+  if (!n) return ''
+  if (['yes', 'y', 'true', '1', 'oo'].includes(n)) return 'yes'
+  if (['no', 'n', 'false', '0', 'hindi'].includes(n)) return 'no'
+  return null
+}
+
 function parseDate(raw: unknown): string | null {
   const s = String(raw ?? '').trim()
   if (!s) return null
@@ -34,7 +45,43 @@ function parseDate(raw: unknown): string | null {
   return null
 }
 
-function parseRow(r: Record<string, unknown>, line: number, puroks: string[]): Parsed {
+/** Optional columns, in template order. A sub-column follows the field named in "parent". */
+type Kind = 'text' | 'list' | 'yesno' | 'enum' | 'phone'
+const OPTIONAL: { key: string; kind: Kind; parent?: string; options?: { value: string; label: string }[]; max?: number }[] = [
+  { key: 'middle_name', kind: 'text', max: 80 },
+  { key: 'suffix', kind: 'text', max: 10 },
+  { key: 'civil_status', kind: 'enum', options: CIVIL_OPTIONS },
+  { key: 'civil_status_other', kind: 'text', parent: 'civil_status', max: 60 },
+  { key: 'contact_number', kind: 'phone' },
+  { key: 'email', kind: 'text', max: 120 },
+  { key: 'registered_voter', kind: 'yesno' },
+  { key: 'religion', kind: 'text', max: 60 },
+  { key: 'education_level', kind: 'enum', options: EDU_LEVEL_OPTIONS },
+  { key: 'course', kind: 'text', max: 120 },
+  { key: 'out_of_school_reason', kind: 'text', max: 200 },
+  { key: 'employment_status', kind: 'enum', options: EMPLOYMENT_OPTIONS },
+  { key: 'employment_sector', kind: 'enum', options: SECTOR_OPTIONS },
+  { key: 'government_agency', kind: 'text', max: 120 },
+  { key: 'employment_duration', kind: 'text', max: 60 },
+  { key: 'has_disability', kind: 'yesno' },
+  { key: 'disability_details', kind: 'text', parent: 'has_disability', max: 200 },
+  { key: 'has_medical_condition', kind: 'yesno' },
+  { key: 'medical_details', kind: 'text', parent: 'has_medical_condition', max: 200 },
+  { key: 'youth_org_member', kind: 'yesno' },
+  { key: 'youth_org_name', kind: 'text', parent: 'youth_org_member', max: 120 },
+  { key: 'skills', kind: 'list' },
+  { key: 'interests', kind: 'list' },
+  { key: 'civic_involvement', kind: 'list' },
+]
+
+/** Template columns: the core fields, then every optional field the form settings show. */
+const columnsFor = (rules: FormRules) => [
+  'first_name', 'last_name', 'birthdate', 'sex', 'purok', 'education_status',
+  ...OPTIONAL.filter((c) => shown(rules, c.parent ?? c.key)).map((c) => c.key),
+  'guardian_name', 'guardian_relationship',
+]
+
+function parseRow(r: Record<string, unknown>, line: number, puroks: string[], rules: FormRules): Parsed {
   const get = (k: string) => String(r[k] ?? '').trim()
   const name = `${get('first_name')} ${get('last_name')}`.trim() || '(no name)'
   const fail = (error: string): Parsed => ({ line, name, payload: null, error })
@@ -48,33 +95,58 @@ function parseRow(r: Record<string, unknown>, line: number, puroks: string[]): P
 
   const sex = pickEnum(r.sex, SEX_OPTIONS, { m: 'male', f: 'female' })
   if (!sex) return fail('sex must be male or female')
-  const civil = pickEnum(r.civil_status, CIVIL_OPTIONS)
-  if (civil === null) return fail('civil_status is not recognized')
   const purok = puroks.find((p) => p.trim().toLowerCase() === get('purok').toLowerCase())
   if (!purok) return fail(`purok "${get('purok')}" does not exist (see the Allowed values sheet)`)
   const edu = pickEnum(r.education_status, EDU_STATUS_OPTIONS, { osy: 'out_of_school', 'out_of_school_youth': 'out_of_school' })
   if (!edu) return fail('education_status must be in_school, out_of_school or graduated')
-  const level = pickEnum(r.education_level, EDU_LEVEL_OPTIONS)
-  if (level === null) return fail('education_level is not recognized')
-  const emp = pickEnum(r.employment_status, EMPLOYMENT_OPTIONS)
-  if (emp === null) return fail('employment_status is not recognized')
-  const phone = get('contact_number').replace(/[\s-]/g, '')
-  if (phone && !/^(\+63|0)9\d{9}$/.test(phone)) return fail('contact_number must be a mobile number like 09171234567')
+
+  const payload: Record<string, unknown> = {
+    first_name: get('first_name'), last_name: get('last_name'), birthdate, sex, purok, education_status: edu,
+    guardian_name: get('guardian_name'), guardian_relationship: get('guardian_relationship'),
+  }
+  // Parse every shown optional column; hidden ones are ignored (the database drops them too).
+  for (const c of OPTIONAL) {
+    if (!shown(rules, c.parent ?? c.key)) continue
+    const raw = get(c.key)
+    if (c.kind === 'enum') {
+      const v = pickEnum(raw, c.options ?? [])
+      if (v === null) return fail(`${c.key} is not recognized (see the Allowed values sheet)`)
+      payload[c.key] = v
+    } else if (c.kind === 'yesno') {
+      const v = pickYesNo(raw)
+      if (v === null) return fail(`${c.key} must be yes or no`)
+      payload[c.key] = v
+    } else if (c.kind === 'list') {
+      payload[c.key] = toList(raw)
+    } else if (c.kind === 'phone') {
+      const phone = raw.replace(/[\s-]/g, '')
+      if (phone && !/^(\+63|0)9\d{9}$/.test(phone)) return fail('contact_number must be a mobile number like 09171234567')
+      payload[c.key] = phone
+    } else {
+      if (c.max && raw.length > c.max) return fail(`${c.key} is longer than ${c.max} characters`)
+      payload[c.key] = raw
+    }
+  }
+
+  const answers = {
+    education_level: String(payload.education_level ?? ''), education_status: edu,
+    employment_status: String(payload.employment_status ?? ''), employment_sector: String(payload.employment_sector ?? ''),
+  }
+  for (const c of OPTIONAL) {
+    if (c.parent || !required(rules, c.key) || !fieldApplies(c.key, answers)) continue
+    const v = payload[c.key]
+    if (Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim()) return fail(`${c.key} is required by the form settings`)
+  }
+  const email = String(payload.email ?? '')
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('email is not a valid email address')
+  if (payload.youth_org_member === 'yes' && !String(payload.youth_org_name ?? '').trim()) return fail('youth_org_name is required when youth_org_member is yes')
   if (age < 18 && !get('guardian_name')) return fail('guardian_name is required for youth below 18')
 
-  return {
-    line, name, error: null,
-    payload: {
-      first_name: get('first_name'), middle_name: get('middle_name'), last_name: get('last_name'), suffix: get('suffix'),
-      birthdate, sex, civil_status: civil || 'single', purok, contact_number: phone,
-      education_status: edu, education_level: level, employment_status: emp || 'unemployed',
-      skills: toList(get('skills')), interests: toList(get('interests')), civic_involvement: toList(get('civic_involvement')),
-      guardian_name: get('guardian_name'), guardian_relationship: get('guardian_relationship'),
-    },
-  }
+  return { line, name, error: null, payload }
 }
 
-export default function ImportWizard({ puroks }: { puroks: string[] }) {
+export default function ImportWizard({ puroks, settings }: { puroks: string[]; settings: FormFieldSetting[] }) {
+  const rules = useMemo(() => toRules(settings), [settings])
   const input = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState<Parsed[]>([])
@@ -88,20 +160,33 @@ export default function ImportWizard({ puroks }: { puroks: string[] }) {
 
   const valid = rows.filter((r) => r.payload)
   const invalid = rows.filter((r) => !r.payload)
+  const columns = columnsFor(rules)
+  const requiredCols = OPTIONAL.filter((c) => !c.parent && required(rules, c.key)).map((c) => c.key)
 
   const template = () => {
-    const example: Row = {
-      first_name: 'Juan', middle_name: 'Santos', last_name: 'Dela Cruz', suffix: '', birthdate: '2003-06-15', sex: 'male', civil_status: 'single',
-      purok: puroks[0] ?? 'Purok 1', contact_number: '09171234567', education_status: 'out_of_school', education_level: 'senior_high',
-      employment_status: 'unemployed', skills: 'carpentry, welding', interests: 'basketball', civic_involvement: 'SK activities', guardian_name: '', guardian_relationship: '',
+    const sample: Record<string, string> = {
+      first_name: 'Juan', middle_name: 'Santos', last_name: 'Dela Cruz', suffix: '', birthdate: '2003-06-15', sex: 'male',
+      civil_status: 'single', civil_status_other: '', purok: puroks[0] ?? 'Purok 1', contact_number: '09171234567', email: 'juan@example.com',
+      registered_voter: 'yes', religion: '', education_status: 'out_of_school', education_level: 'senior_high', course: '',
+      out_of_school_reason: 'financial problem', employment_status: 'unemployed', employment_sector: '', government_agency: '', employment_duration: '',
+      has_disability: '', disability_details: '', has_medical_condition: '', medical_details: '', youth_org_member: 'no', youth_org_name: '',
+      skills: 'carpentry, welding', interests: 'basketball', civic_involvement: 'SK activities', guardian_name: '', guardian_relationship: '',
     }
+    const example: Row = Object.fromEntries(columns.map((k) => [k, sample[k] ?? '']))
     const list = (o: { value: string }[]) => o.map((x) => x.value)
-    const max = Math.max(puroks.length, 7)
-    const allowed: string[][] = [['purok', 'sex', 'civil_status', 'education_status', 'education_level', 'employment_status']]
-    for (let i = 0; i < max; i++) {
-      allowed.push([puroks[i] ?? '', list(SEX_OPTIONS)[i] ?? '', list(CIVIL_OPTIONS)[i] ?? '', list(EDU_STATUS_OPTIONS)[i] ?? '', list(EDU_LEVEL_OPTIONS)[i] ?? '', list(EMPLOYMENT_OPTIONS)[i] ?? ''])
-    }
-    exportWorkbook([{ name: 'Youth', rows: [example] }, { name: 'Allowed values', rows: allowed }], 'youth-import-template.xlsx')
+    const lists: [string, string[]][] = [
+      ['purok', puroks], ['sex', list(SEX_OPTIONS)], ['education_status', list(EDU_STATUS_OPTIONS)],
+      ...OPTIONAL.filter((c) => shown(rules, c.parent ?? c.key) && (c.kind === 'enum' || c.kind === 'yesno'))
+        .map((c): [string, string[]] => [c.key, c.kind === 'yesno' ? ['yes', 'no'] : list(c.options ?? [])]),
+    ]
+    const max = Math.max(...lists.map(([, l]) => l.length))
+    const allowed: string[][] = [lists.map(([k]) => k)]
+    for (let i = 0; i < max; i++) allowed.push(lists.map(([, l]) => l[i] ?? ''))
+    const notes: string[][] = [
+      ['Column', 'Required?'],
+      ...columns.map((k) => [k, ['first_name', 'last_name', 'birthdate', 'sex', 'purok', 'education_status'].includes(k) || requiredCols.includes(k) ? 'Required' : k === 'guardian_name' ? 'Required below 18' : 'Optional']),
+    ]
+    exportWorkbook([{ name: 'Youth', rows: [example] }, { name: 'Allowed values', rows: allowed }, { name: 'Columns', rows: notes }], 'youth-import-template.xlsx')
   }
 
   const onFile = async (file: File) => {
@@ -117,7 +202,7 @@ export default function ImportWizard({ puroks }: { puroks: string[] }) {
       if (missing.length) return fail(`Missing column(s): ${missing.join(', ')}. Download the template to see the expected headers.`)
       const cleaned = json.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim().toLowerCase(), v])))
       setFileName(file.name)
-      setRows(cleaned.map((r, i) => parseRow(r, i + 2, puroks)))
+      setRows(cleaned.map((r, i) => parseRow(r, i + 2, puroks, rules)))
     } catch {
       setError('This file could not be read. Make sure it is a valid Excel or CSV file.')
     }
@@ -154,7 +239,11 @@ export default function ImportWizard({ puroks }: { puroks: string[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <SectionTitle sub="Use the template so the columns match. Dates as 2002-05-31. Skills and interests separated by commas.">Step 1: get the template</SectionTitle>
+        <SectionTitle sub="Use the template so the columns match. Dates as 2002-05-31. Skills and interests separated by commas. Yes/no columns take yes or no.">Step 1: get the template</SectionTitle>
+        <p className="mb-4 text-sm font-semibold text-slate-500">
+          The columns follow the current form settings.
+          {requiredCols.length > 0 && <> Also required: <span className="font-black text-ink">{requiredCols.join(', ')}</span>.</>}
+        </p>
         <button onClick={template} className={btnGhost}><Download className="h-4 w-4" /> Download template (.xlsx)</button>
       </Card>
 
@@ -186,7 +275,10 @@ export default function ImportWizard({ puroks }: { puroks: string[] }) {
           )}
           <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-[2rem] bg-slate-50 p-5 ring-1 ring-black/5">
             <input type="checkbox" className="mt-1 h-5 w-5 accent-[#1d4ed8]" checked={attest} onChange={(e) => setAttest(e.target.checked)} />
-            <span className="text-sm font-bold">I confirm that signed data privacy consent forms are on file for these youth, including parent or guardian consent for those below 18.</span>
+            <span className="text-sm font-bold">
+              I confirm that signed data privacy consent forms are on file for these youth, including parent or guardian consent for those below 18
+              {anySensitiveShown(rules) ? ', and that rows with religion, disability or medical information have the consent version that covers sensitive information' : ''}.
+            </span>
           </label>
           <button onClick={run} disabled={busy || !attest || valid.length === 0} className={`${btnDark} mt-5`}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}

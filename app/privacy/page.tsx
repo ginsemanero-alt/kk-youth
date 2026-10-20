@@ -1,22 +1,24 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { Card } from '@/components/ui'
-import { CONSENT_VERSION } from '@/lib/constants'
+import { CONSENT_VERSION, CONSENT_VERSION_SPI } from '@/lib/constants'
 
 export const metadata = { title: 'Privacy notice' }
 
 const SECTIONS: { title: string; body: string[] }[] = [
   { title: 'What we collect', body: [
-    'Name, birthdate, sex, civil status, purok or sitio, optional mobile number, educational status and level, employment status, skills, interests and civic involvement. For youth below 18, the name of a parent or guardian.',
+    'The fields of the SK Youth Profile Form: name, birthdate, sex, civil status, purok or sitio, mobile number and email, whether you are a registered SK voter, educational status, level and course (or the reason for not attending school), work status, sector and length of employment, youth organization membership, skills, interests and civic involvement. For youth below 18, the name of a parent or guardian. The SK may choose not to ask some of these.',
+    'Only if the SK turns them on: religion, disability and medical condition. These are sensitive personal information under the Data Privacy Act. Answering them is voluntary, only the SK Admin and encoders can see them, they are not written to the audit log, and they are left out of reports unless an Admin includes them.',
     'We do not collect government ID numbers, addresses beyond the purok, photos, or social media accounts.' ] },
   { title: 'Why we collect it', body: [
-    'To know who the youth of the barangay are, plan programs and activities, prepare the Comprehensive Barangay Youth Development Plan and SK reports, identify out-of-school youth who may need referrals, and track participation in SK activities.' ] },
+    'Profiling of the Katipunan ng Kabataan under Republic Act No. 10742 (Sangguniang Kabataan Reform Act of 2015): to know who the youth of the barangay are, plan programs and activities, prepare the Comprehensive Barangay Youth Development Plan and SK reports, identify out-of-school youth who may need referrals, and track participation in SK activities.' ] },
   { title: 'Who can see it', body: [
-    'Only signed-in SK staff. Admins have full access. Encoders can add and edit profiles. Viewers can read dashboards and reports but cannot see contact numbers. Access is enforced by the database, not only by the screens.' ] },
+    'Only signed-in SK staff. Admins have full access. Encoders can add and edit profiles. Viewers can read dashboards and reports but cannot see contact numbers or sensitive information. Access is enforced by the database, not only by the screens.' ] },
   { title: 'How it is protected', body: [
     'Mobile numbers are encrypted in the database and stored separately from the profile. Revealing a number is logged. Every creation, change, deletion and export is written to an audit log that cannot be edited. Consent scans are kept in a private storage bucket.' ] },
   { title: 'Consent', body: [
-    `Your consent is recorded with the date and version of this notice (${CONSENT_VERSION}). Youth aged 15 to 17 need a parent or guardian to give consent as well.` ] },
+    `Your consent is recorded with the date and version of this notice (${CONSENT_VERSION}, or ${CONSENT_VERSION_SPI} when the form also asks for sensitive information). Records saved earlier keep the version they were saved with. Youth aged 15 to 17 need a parent or guardian to give consent as well.`,
+    'The information you give will not be used as evidence against you in any legal proceeding.' ] },
   { title: 'How long we keep it', body: [
     'Active profiles are kept while you are within the youth age range and the SK needs them for planning. Deleted profiles are kept for 365 days so mistakes can be undone, then permanently removed. Audit logs are kept for three years.' ] },
   { title: 'Your rights', body: [

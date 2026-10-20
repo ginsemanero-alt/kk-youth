@@ -1,23 +1,31 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { Loader2, Save } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ProfileFields from '@/components/ProfileFields'
 import { Alert, Field, btnGhost, btnPrimary, inputCls } from '@/components/ui'
-import { CONSENT_VERSION, GUARDIAN_CONSENT_TEXT } from '@/lib/constants'
+import { CONSENT_SPI_TEXT, GUARDIAN_CONSENT_TEXT, consentVersionFor } from '@/lib/constants'
 import { ageOn } from '@/lib/format'
 import { friendlyError } from '@/lib/errors'
+import { anySensitiveShown, required, toRules } from '@/lib/formSettings'
+import type { FormFieldSetting } from '@/lib/types'
 import { useToast } from '@/components/Toast'
-import { cleanPhone, emptyProfile, validateProfile, type ProfileValues } from '@/lib/validation'
+import { cleanPhone, emptyProfile, profilePayload, validateProfile, type ProfileValues } from '@/lib/validation'
 
-export default function YouthForm({ mode, puroks, youthId, initial }: {
+export default function YouthForm({ mode, puroks, settings, youthId, youthCode, consentVersion, initial }: {
   mode: 'create' | 'edit'
   puroks: { id: string; name: string }[]
+  /** Form settings (public.form_fields), read on the server. */
+  settings: FormFieldSetting[]
   youthId?: string
+  youthCode?: string
+  /** Consent version already on file (edit mode). */
+  consentVersion?: string
   initial?: ProfileValues
 }) {
   const router = useRouter()
+  const rules = useMemo(() => toRules(settings), [settings])
   const [v, setV] = useState<ProfileValues>(initial ?? emptyProfile)
   const today = new Date().toISOString().slice(0, 10)
   const [consentOn, setConsentOn] = useState(false)
@@ -30,11 +38,19 @@ export default function YouthForm({ mode, puroks, youthId, initial }: {
 
   const age = v.birthdate ? ageOn(v.birthdate) : null
   const isMinor = age !== null && age >= 0 && age < 18
+  const sensitiveShown = anySensitiveShown(rules)
+  const newVersion = consentVersionFor(sensitiveShown)
+  // Sensitive fields can be added to an existing profile only if its consent covers them.
+  const includeSensitive = mode === 'create' || Boolean(consentVersion?.endsWith('-SPI'))
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    const problem = validateProfile(v)
+    const skip = [
+      ...(mode === 'edit' ? ['contact_number'] : []),
+      ...(includeSensitive ? [] : ['religion', 'has_disability', 'has_medical_condition']),
+    ]
+    const problem = validateProfile(v, rules, { skip })
     if (problem) return fail(problem)
     if (mode === 'create') {
       if (!consentOn) return fail('Confirm that the signed consent form is on file before saving.')
@@ -44,13 +60,7 @@ export default function YouthForm({ mode, puroks, youthId, initial }: {
 
     setBusy(true)
     const supabase = createClient()
-    const fields = {
-      first_name: v.first_name, middle_name: v.middle_name || null, last_name: v.last_name, suffix: v.suffix || null,
-      birthdate: v.birthdate, sex: v.sex, civil_status: v.civil_status, purok_id: v.purok_id,
-      education_status: v.education_status, education_level: v.education_level || null, employment_status: v.employment_status,
-      skills: v.skills, interests: v.interests, civic_involvement: v.civic_involvement,
-      guardian_name: isMinor ? v.guardian_name : null, guardian_relationship: isMinor ? v.guardian_relationship || null : null,
-    }
+    const fields = profilePayload(v, rules, { isMinor, includeSensitive })
 
     let id = youthId
     if (mode === 'create') {
@@ -58,7 +68,7 @@ export default function YouthForm({ mode, puroks, youthId, initial }: {
       const { data, error: err } = await supabase
         .from('youth')
         .insert({
-          ...fields, consent_version: CONSENT_VERSION, consent_at: consentAt, consent_source: 'form',
+          ...fields, consent_version: newVersion, consent_at: consentAt, consent_source: 'form',
           guardian_consent_at: isMinor ? consentAt : null,
         })
         .select('id')
@@ -83,12 +93,21 @@ export default function YouthForm({ mode, puroks, youthId, initial }: {
   return (
     <form onSubmit={submit} className="space-y-6" noValidate>
       {error && <Alert>{error}</Alert>}
+      {mode === 'edit' && !includeSensitive && sensitiveShown && (
+        <Alert tone="info">
+          Religion, disability and medical fields are not shown for this profile: its consent ({consentVersion}) does not cover sensitive information.
+          Record a new signed consent ({newVersion}) first if these are needed.
+        </Alert>
+      )}
       <ProfileFields
         values={v}
         onChange={setV}
         puroks={puroks}
+        rules={rules}
         idPrefix={mode}
-        contactHint={mode === 'edit' ? 'Leave blank to keep the saved number' : 'Optional. Stored encrypted.'}
+        youthCode={youthCode}
+        hideSensitive={!includeSensitive}
+        contactHint={mode === 'edit' ? 'Leave blank to keep the saved number' : 'Stored encrypted.'}
       />
 
       {mode === 'create' && (
@@ -98,11 +117,14 @@ export default function YouthForm({ mode, puroks, youthId, initial }: {
             <Field label="Date consent was signed" htmlFor="consent-date">
               <input id="consent-date" type="date" className={inputCls} value={consentDate} max={today} onChange={(e) => setConsentDate(e.target.value)} required />
             </Field>
-            <div className="self-end text-sm font-semibold text-white/60">Version {CONSENT_VERSION}</div>
+            <div className="self-end text-sm font-semibold text-white/60">Version {newVersion}</div>
           </div>
+          {sensitiveShown && <p className="mt-4 rounded-[1.5rem] bg-flag/20 p-4 text-sm font-semibold text-white/90 ring-1 ring-flag/40">{CONSENT_SPI_TEXT}</p>}
           <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-[1.5rem] bg-white/10 p-4">
             <input type="checkbox" className="mt-1 h-5 w-5 accent-[#facc15]" checked={consentOn} onChange={(e) => setConsentOn(e.target.checked)} />
-            <span className="text-sm font-black">The youth has signed the data privacy consent form and it is on file with the SK.</span>
+            <span className="text-sm font-black">
+              The youth has signed the data privacy consent form (version {newVersion}) and it is on file with the SK.
+            </span>
           </label>
           {isMinor && (
             <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-[1.5rem] bg-amber-300/20 p-4 ring-1 ring-amber-300/40">
@@ -120,6 +142,9 @@ export default function YouthForm({ mode, puroks, youthId, initial }: {
         </button>
         <button type="button" onClick={() => router.back()} className={btnGhost}>Cancel</button>
       </div>
+      {mode === 'create' && required(rules, 'contact_number') && (
+        <p className="text-xs font-semibold text-slate-400">The mobile number is required by the form settings and is saved encrypted right after the profile.</p>
+      )}
     </form>
   )
 }

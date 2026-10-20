@@ -3,18 +3,22 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ExportButtons from '@/components/ExportButtons'
-import { AGE_BRACKETS, EDU_LEVEL_OPTIONS, EDU_STATUS_OPTIONS, EMPLOYMENT_OPTIONS, CIVIL_OPTIONS, label } from '@/lib/constants'
+import { ShieldAlert } from 'lucide-react'
+import { AGE_BRACKETS, EDU_LEVEL_OPTIONS, EDU_STATUS_OPTIONS, EMPLOYMENT_OPTIONS, CIVIL_OPTIONS, SECTOR_OPTIONS, label, yesNo } from '@/lib/constants'
 import { friendlyError } from '@/lib/errors'
 import { formatDate } from '@/lib/format'
 import type { Row } from '@/lib/export'
-import type { YouthOverview } from '@/lib/types'
+import type { Role, YouthOverview, YouthSensitive } from '@/lib/types'
 import { Alert, Card, EducationBadge, EmploymentBadge, Field, StatCard, inputCls } from '@/components/ui'
 
-const COLUMNS = [
-  'Youth ID', 'Name', 'Age', 'Age bracket', 'Sex', 'Civil status', 'Birthdate', 'Purok', 'Education', 'Level', 'Employment', 'Skills', 'Interests',
-].map((k) => ({ header: k, key: k }))
+// Email and contact numbers are never exported (data minimization).
+const BASE_COLUMNS = [
+  'Youth ID', 'Name', 'Age', 'Age bracket', 'Sex', 'Civil status', 'Birthdate', 'Purok', 'Education', 'Level', 'Course',
+  'Employment', 'Sector', 'Registered SK voter', 'Youth organization', 'Skills', 'Interests',
+]
+const SENSITIVE_COLUMNS = ['Religion', 'PWD', 'Medical condition']
 
-export default function ReportBuilder({ puroks }: { puroks: { id: string; name: string }[] }) {
+export default function ReportBuilder({ puroks, role }: { puroks: { id: string; name: string }[]; role: Role }) {
   const [purok, setPurok] = useState('')
   const [bracket, setBracket] = useState('')
   const [edu, setEdu] = useState('')
@@ -22,6 +26,9 @@ export default function ReportBuilder({ puroks }: { puroks: { id: string; name: 
   const [rows, setRows] = useState<YouthOverview[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Admin only: the database refuses this read for every other role, and it is logged.
+  const [withSensitive, setWithSensitive] = useState(false)
+  const [sensitive, setSensitive] = useState<Map<string, YouthSensitive> | null>(null)
 
   const run = useCallback(async () => {
     setLoading(true)
@@ -39,17 +46,46 @@ export default function ReportBuilder({ puroks }: { puroks: { id: string; name: 
 
   useEffect(() => { void run() }, [run])
 
-  const exportRows: Row[] = rows.map((r) => ({
-    'Youth ID': r.youth_code, Name: r.full_name, Age: r.age, 'Age bracket': r.age_bracket, Sex: r.sex === 'male' ? 'Male' : 'Female',
-    'Civil status': label(CIVIL_OPTIONS, r.civil_status), Birthdate: formatDate(r.birthdate), Purok: r.purok_name,
-    Education: label(EDU_STATUS_OPTIONS, r.education_status), Level: label(EDU_LEVEL_OPTIONS, r.education_level),
-    Employment: label(EMPLOYMENT_OPTIONS, r.employment_status), Skills: r.skills.join(', '), Interests: r.interests.join(', '),
-  }))
+  useEffect(() => {
+    setSensitive(null)
+    if (!withSensitive || role !== 'admin' || rows.length === 0) return
+    let cancelled = false
+    void (async () => {
+      const { data, error: err } = await createClient().rpc('get_youth_sensitive_bulk', { p_ids: rows.map((r) => r.id) })
+      if (cancelled) return
+      if (err) { setWithSensitive(false); return setError(friendlyError(err)) }
+      setSensitive(new Map(((data ?? []) as YouthSensitive[]).map((x) => [x.id, x])))
+    })()
+    return () => { cancelled = true }
+  }, [withSensitive, role, rows])
 
-  const filters = { purok: puroks.find((p) => p.id === purok)?.name ?? 'All', ageBracket: bracket || 'All', education: edu || 'All', employment: emp || 'All' }
+  const includeSensitive = role === 'admin' && withSensitive && sensitive !== null
+  const columns = [...BASE_COLUMNS, ...(includeSensitive ? SENSITIVE_COLUMNS : [])].map((k) => ({ header: k, key: k }))
+  const detail = (flag: boolean | null | undefined, text: string | null | undefined) => (flag ? text || 'Yes' : yesNo(flag))
+
+  const exportRows: Row[] = rows.map((r) => {
+    const row: Row = {
+      'Youth ID': r.youth_code, Name: r.full_name, Age: r.age, 'Age bracket': r.age_bracket, Sex: r.sex === 'male' ? 'Male' : 'Female',
+      'Civil status': r.civil_status === 'others' ? r.civil_status_other || 'Others' : label(CIVIL_OPTIONS, r.civil_status),
+      Birthdate: formatDate(r.birthdate), Purok: r.purok_name,
+      Education: label(EDU_STATUS_OPTIONS, r.education_status), Level: label(EDU_LEVEL_OPTIONS, r.education_level), Course: r.course ?? '',
+      Employment: label(EMPLOYMENT_OPTIONS, r.employment_status), Sector: label(SECTOR_OPTIONS, r.employment_sector),
+      'Registered SK voter': yesNo(r.registered_voter), 'Youth organization': detail(r.youth_org_member, r.youth_org_name),
+      Skills: r.skills.join(', '), Interests: r.interests.join(', '),
+    }
+    if (includeSensitive) {
+      const s = sensitive?.get(r.id)
+      row.Religion = s?.religion ?? ''
+      row.PWD = detail(s?.has_disability, s?.disability_details)
+      row['Medical condition'] = detail(s?.has_medical_condition, s?.medical_details)
+    }
+    return row
+  })
+
+  const filters = { purok: puroks.find((p) => p.id === purok)?.name ?? 'All', ageBracket: bracket || 'All', education: edu || 'All', employment: emp || 'All', sensitive: includeSensitive }
   const subtitle = `Purok: ${filters.purok} | Age: ${filters.ageBracket} | Education: ${filters.education} | Employment: ${filters.employment} | ${rows.length} youth`
   const osy = rows.filter((r) => r.is_osy).length
-  const employed = rows.filter((r) => r.employment_status !== 'unemployed').length
+  const employed = rows.filter((r) => r.employment_status === 'employed' || r.employment_status === 'self_employed').length
 
   return (
     <>
@@ -79,6 +115,16 @@ export default function ReportBuilder({ puroks }: { puroks: { id: string; name: 
         </div>
       </Card>
 
+      {role === 'admin' && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-[2rem] bg-red-50 p-5 ring-1 ring-red-200">
+          <input type="checkbox" className="mt-1 h-5 w-5 accent-[#dc2626]" checked={withSensitive} onChange={(e) => setWithSensitive(e.target.checked)} />
+          <span className="text-sm font-bold text-red-800">
+            <span className="inline-flex items-center gap-1.5 font-black"><ShieldAlert className="h-4 w-4" aria-hidden /> Include religion, disability and medical information (Admin only)</span>
+            <span className="mt-1 block font-semibold">Sensitive personal information. Include it only when the program really needs it. Reading it is recorded in the audit log.</span>
+          </span>
+        </label>
+      )}
+
       {error && <Alert>{error}</Alert>}
 
       <div className="grid gap-5 sm:grid-cols-3">
@@ -89,7 +135,7 @@ export default function ReportBuilder({ puroks }: { puroks: { id: string; name: 
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-bold text-slate-500">{rows.length > 25 ? `Showing the first 25 of ${rows.length}. Exports include all rows.` : 'Preview'}</p>
-        <ExportButtons rows={exportRows} columns={COLUMNS} title="Youth profile report" subtitle={subtitle} filename="youth-report" source="youth_overview" filters={filters} printable />
+        <ExportButtons rows={exportRows} columns={columns} title="Youth profile report" subtitle={subtitle} filename="youth-report" source="youth_overview" filters={filters} printable />
       </div>
 
       <div className="overflow-x-auto rounded-[3rem] bg-white shadow-sm ring-1 ring-black/5">

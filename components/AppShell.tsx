@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
-  Activity, BarChart3, ClipboardCheck, FileText, KeyRound, LifeBuoy, LogOut, MapPin, Menu, ScrollText, ShieldCheck, Upload, Users, UsersRound, X,
+  Activity, BarChart3, ClipboardCheck, FileText, KeyRound, LifeBuoy, LogOut, MapPin, Menu, ScrollText, ShieldCheck, SlidersHorizontal, Upload, Users, UsersRound, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Role } from '@/lib/types'
@@ -23,6 +23,7 @@ const ITEMS: Item[] = [
   { href: '/registrations', label: 'Registrations', icon: ClipboardCheck, roles: STAFF },
   { href: '/import', label: 'Excel import', icon: Upload, roles: STAFF },
   { href: '/puroks', label: 'Puroks', icon: MapPin, roles: ['admin'] },
+  { href: '/admin/form-settings', label: 'Form settings', icon: SlidersHorizontal, roles: ['admin'] },
   { href: '/admin/users', label: 'Users', icon: UsersRound, roles: ['admin'] },
   { href: '/admin/audit', label: 'Audit and data', icon: ScrollText, roles: ['admin'] },
 ]

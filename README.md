@@ -16,8 +16,10 @@ Youth registry with duplicate detection, purok management, dashboard analytics (
    1. `supabase/01_schema.sql`
    2. `supabase/02_security.sql`
    3. `supabase/03_seed.sql` (optional sample puroks)
+   4. `supabase/04_form_fields_extra.sql` (fields from the paper Youth Profile Form)
+   5. `supabase/05_form_settings.sql` (Admin form settings)
 
-   All files can be re-run safely.
+   All files can be re-run safely. If you re-run 01 or 02, run every later file again in order afterwards (02 resets grants and functions that 04 and 05 extend).
 4. **Environment**: copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project Settings > API)
    - `SUPABASE_SERVICE_ROLE_KEY` (same page). Server only. Never prefix it with `NEXT_PUBLIC_`, never commit it.
@@ -43,8 +45,40 @@ Push to GitHub, import the repo in Vercel, add the four environment variables, d
 - **Windows**: `npm run test:db` works on Windows and Linux. On a low-memory PC, test with `npm run build` then `npm start` instead of `npm run dev`.
 - **Rate limiting**: before a public launch, put a CAPTCHA (Cloudflare Turnstile or Supabase CAPTCHA) in front of the self-registration form.
 - **Imports** are marked with consent source "import". The importing user confirms that signed consent forms are on file; under-18 rows need a guardian name.
-- Exports never include contact numbers.
-- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (76 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
+- Exports never include contact numbers or email addresses. Religion, disability and medical information are exported only when an Admin ticks "Include sensitive information" on the Reports page (the read is logged).
+- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (121 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
+
+## Form settings (Admin)
+
+**Form settings** (`/admin/form-settings`, Admin only) decides which optional details the self-registration form, the encoder form and the Excel import ask for: **Ipakita** (show) and **Required** per field, with a live preview. The database enforces the settings on every insert (a hidden field is dropped, a missing required field is rejected), so the browser is not trusted. Changing a setting never alters saved records: an edited record keeps the values of fields that were hidden later, and registrations submitted earlier can still be approved.
+
+Always asked and required (not in the settings, because duplicate detection, the age bracket, the dashboard and the OSY flag need them): first name, last name, birthdate, sex, purok, educational status.
+
+Fields from the paper SK **Youth Profile Form** (consent + personal information + other information):
+
+| Section | Field | Notes |
+|---|---|---|
+| Personal | ID No. | Automatic youth code (`KK-2026-00001`), never asked |
+| Personal | Last, first, middle name, suffix | Middle name and suffix optional by default |
+| Personal | Birthdate, age group | Age group 15-17 / 18-24 / 25-30 is computed, never asked |
+| Personal | Sex, purok | Core |
+| Personal | Civil status | Includes "Others, please specify" |
+| Personal | Mobile number, email | Mobile number encrypted |
+| Personal | Registered SK voter | Yes / No |
+| Personal | Religion | **Sensitive**, hidden by default |
+| Personal | Educational status, level, course | Course only for college, vocational, post-graduate, doctorate |
+| Personal | Reason for not attending school | Only for out-of-school youth |
+| Personal | Work status, sector, government agency, length of employment | Sector and agency only when employed; agency only for government |
+| Other | Person with disability, type | **Sensitive**, hidden by default |
+| Other | Medical condition, details | **Sensitive**, hidden by default |
+| Other | Youth organization member, name | Name required when member |
+| Other | Skills, interests, civic involvement | |
+
+Conditional fields appear only when they apply, and a database trigger clears them when they no longer apply (for example, the out-of-school reason is erased when the youth is in school).
+
+**Sensitive information** (religion, disability, medical) is hidden and optional by default, readable only by Admin and Encoder (enforced with column grants and the `youth_sensitive` view, so Viewers cannot read it from any table, view or export), exported only by an Admin, and never written to the audit log (the log only says the field changed). When any sensitive field is shown, the consent text gains a paragraph about it and the version becomes `KK-CONSENT-v1.1-SPI`; the database refuses sensitive values without that version. Older records keep the consent version they were saved with.
+
+**Consent text** (`lib/constants.ts`) follows the paper form: consent to collect, process, use and keep the information for KK profiling under RA 10742 and RA 10173, and that it will not be used as evidence in any legal proceeding. It is written in our own words. **Have the barangay legal officer or Data Protection Officer review it before use.**
 
 ## Documentation
 

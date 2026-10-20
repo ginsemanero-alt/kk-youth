@@ -132,10 +132,11 @@ export function EducationBadge({ status }: { status: EducationStatus }) {
   return <Badge tone="red">OSY</Badge>
 }
 
-export function EmploymentBadge({ status }: { status: EmploymentStatus }) {
+export function EmploymentBadge({ status }: { status: EmploymentStatus | null }) {
   if (status === 'employed') return <Badge tone="green">Employed</Badge>
   if (status === 'self_employed') return <Badge tone="teal">Self-employed</Badge>
-  return <Badge tone="amber">Unemployed</Badge>
+  if (status === 'unemployed') return <Badge tone="amber">Unemployed</Badge>
+  return <Badge tone="slate">Work: not specified</Badge>
 }
 
 export function RegistrationBadge({ status }: { status: RegistrationStatus }) {

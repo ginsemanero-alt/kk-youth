@@ -3,9 +3,9 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, FileCheck2, LifeBuoy, Pencil, ShieldCheck } from 'lucide-react'
 import { canEdit, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, ACTIVITY_CATEGORIES, label } from '@/lib/constants'
+import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, EMPLOYMENT_OPTIONS, SECTOR_OPTIONS, ACTIVITY_CATEGORIES, label, yesNo } from '@/lib/constants'
 import { formatDate, formatDateTime } from '@/lib/format'
-import type { YouthOverview } from '@/lib/types'
+import type { YouthOverview, YouthSensitive } from '@/lib/types'
 import { Alert, Badge, Card, EducationBadge, EmploymentBadge, Pill, SectionTitle, btnPrimary } from '@/components/ui'
 import { ConsentScanUpload, ContactReveal, DeleteRestore } from './YouthActions'
 
@@ -34,6 +34,13 @@ export default async function YouthDetailPage({ params }: { params: Promise<{ id
   const { data } = await supabase.from('youth_overview').select('*').eq('id', id).maybeSingle()
   const y = data as YouthOverview | null
   if (!y) notFound()
+  // Religion, disability and medical: the youth_sensitive view returns nothing to Viewers.
+  let sens: YouthSensitive | null = null
+  if (canEdit(role)) {
+    const { data: s } = await supabase.from('youth_sensitive').select('*').eq('id', id).maybeSingle()
+    sens = s as YouthSensitive | null
+  }
+  const hasSensitive = Boolean(sens && (sens.religion || sens.has_disability !== null || sens.has_medical_condition !== null))
 
   const { data: attendance } = await supabase
     .from('attendance')
@@ -76,15 +83,21 @@ export default async function YouthDetailPage({ params }: { params: Promise<{ id
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <SectionTitle>Profile</SectionTitle>
+          <SectionTitle sub={`ID No. ${y.youth_code}`}>Personal information</SectionTitle>
           <dl className="grid gap-5 sm:grid-cols-2">
             <Info k="Birthdate" v={formatDate(y.birthdate)} />
+            <Info k="Age group" v={y.age_bracket} />
             <Info k="Sex" v={y.sex === 'male' ? 'Male' : 'Female'} />
-            <Info k="Civil status" v={label(CIVIL_OPTIONS, y.civil_status)} />
+            <Info k="Civil status" v={y.civil_status === 'others' ? `Others${y.civil_status_other ? `: ${y.civil_status_other}` : ''}` : label(CIVIL_OPTIONS, y.civil_status)} />
+            <Info k="Registered SK voter" v={yesNo(y.registered_voter)} />
+            {canEdit(role) && <Info k="Email" v={y.email} />}
             <Info k="Education level" v={label(EDU_LEVEL_OPTIONS, y.education_level)} />
-            <Info k="Skills" v={<Tags items={y.skills} />} />
-            <Info k="Interests" v={<Tags items={y.interests} />} />
-            <div className="sm:col-span-2"><Info k="Civic involvement" v={<Tags items={y.civic_involvement} />} /></div>
+            {y.course && <Info k="Course" v={y.course} />}
+            {y.out_of_school_reason && <div className="sm:col-span-2"><Info k="Reason for not attending school" v={y.out_of_school_reason} /></div>}
+            <Info k="Work status" v={label(EMPLOYMENT_OPTIONS, y.employment_status)} />
+            {y.employment_sector && <Info k="Sector" v={label(SECTOR_OPTIONS, y.employment_sector)} />}
+            {y.government_agency && <Info k="Government agency" v={y.government_agency} />}
+            {y.employment_duration && <Info k="Length of employment" v={y.employment_duration} />}
           </dl>
           {canEdit(role) && (
             <div className="mt-6 border-t border-slate-100 pt-6">
@@ -95,6 +108,29 @@ export default async function YouthDetailPage({ params }: { params: Promise<{ id
         </Card>
 
         <Card>
+          <SectionTitle>Other information</SectionTitle>
+          <dl className="grid gap-5 sm:grid-cols-2">
+            <Info k="Youth organization" v={y.youth_org_member ? y.youth_org_name ?? 'Yes' : yesNo(y.youth_org_member)} />
+            <Info k="Skills" v={<Tags items={y.skills} />} />
+            <Info k="Interests" v={<Tags items={y.interests} />} />
+            <div className="sm:col-span-2"><Info k="Civic involvement" v={<Tags items={y.civic_involvement} />} /></div>
+          </dl>
+          {canEdit(role) && hasSensitive && sens && (
+            <div className="mt-6 rounded-[2rem] bg-red-50 p-6 ring-1 ring-red-200">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Badge tone="red">Sensitive</Badge>
+                <span className="text-xs font-bold text-red-800">Admin and Encoder only. Not shown to Viewers.</span>
+              </div>
+              <dl className="grid gap-5 sm:grid-cols-2">
+                {sens.religion && <Info k="Religion" v={sens.religion} />}
+                {sens.has_disability !== null && <Info k="Person with disability" v={sens.has_disability ? sens.disability_details ?? 'Yes' : 'No'} />}
+                {sens.has_medical_condition !== null && <Info k="Medical condition" v={sens.has_medical_condition ? sens.medical_details ?? 'Yes' : 'No'} />}
+              </dl>
+            </div>
+          )}
+        </Card>
+
+        <Card className="lg:col-span-2">
           <SectionTitle sub="Data Privacy Act of 2012">Consent</SectionTitle>
           <dl className="grid gap-5 sm:grid-cols-2">
             <Info k="Version" v={y.consent_version} />
