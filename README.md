@@ -12,7 +12,9 @@ Youth registry with duplicate detection, purok management, dashboard analytics (
 
 1. **Install**: `npm install` (Node 20.9 or newer).
 2. **Supabase project**: create one at https://supabase.com. In Dashboard > Database > Extensions make sure `pgcrypto` and `supabase_vault` are enabled (they are by default).
-3. **Run the SQL** in Dashboard > SQL Editor, in this order, one file at a time:
+3. **Run the SQL** in Dashboard > SQL Editor. **Quickest:** open `supabase/all_in_one.sql`, paste the whole file and click Run (it contains 01, 02, 04, 05 and 06 in order, and is safe to re-run). Run `supabase/03_seed.sql` separately only if you want sample puroks. After editing any SQL file, rebuild the bundle with `npm run sql:bundle` (the tests fail if it is out of date).
+
+   Or run the files one at a time, in this order:
    1. `supabase/01_schema.sql`
    2. `supabase/02_security.sql`
    3. `supabase/03_seed.sql` (optional sample puroks)

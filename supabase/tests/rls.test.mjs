@@ -10,6 +10,8 @@ const s3 = fs.readFileSync(dir + '03_seed.sql', 'utf8')
 const s4 = fs.readFileSync(dir + '04_form_fields_extra.sql', 'utf8')
 const s5 = fs.readFileSync(dir + '05_form_settings.sql', 'utf8')
 const s6 = fs.readFileSync(dir + '06_custom_questions.sql', 'utf8')
+const allInOne = fs.readFileSync(dir + 'all_in_one.sql', 'utf8')
+const { bundle } = await import('../../scripts/bundle-sql.mjs')
 
 const db = new PGlite({ extensions: { pgcrypto } })
 const stubs = `
@@ -52,6 +54,8 @@ try {
   await db.exec(s6); console.log('06 applied')
   for (const f of [s1, s2, s3, s4, s5, s6]) await db.exec(f)
   console.log('re-applied 01 to 06 in order (idempotent)')
+  ok('all_in_one.sql is up to date (npm run sql:bundle)', allInOne === bundle())
+  await db.exec(allInOne); console.log('all_in_one.sql applied on top (idempotent)')
   ok('seed puroks, idempotent', (await q('select count(*)::int c from puroks'))[0].c === 4)
 
   const id = { admin: '00000000-0000-0000-0000-0000000000a1', enc: '00000000-0000-0000-0000-0000000000e1', view: '00000000-0000-0000-0000-0000000000f1', enc2: '00000000-0000-0000-0000-0000000000e2' }
