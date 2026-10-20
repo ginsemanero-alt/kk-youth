@@ -19,10 +19,12 @@ Roles live in `public.profiles.role`. `get_user_role()` (SECURITY DEFINER) retur
 | youth_contacts | none | none | via RPC only | via RPC only |
 | activities | none | read (titles and dates) | read, add, edit | same as encoder |
 | attendance | none | **no rows** | read, add, remove | same |
+| activity_photos | none | **no rows** | read, add, edit caption, delete own | read, add, edit caption, delete any |
 | activity_stats, dashboard_summary(), summary_report() | none | aggregate counts only (1 or 2 shown as "<3") | aggregate counts | aggregate counts |
 | pending_registrations | insert only | none | read, review (RPC) | same |
 | audit_logs | none | none | none | read only |
 | storage consent-scans | none | none | read, upload | read, upload, delete |
+| storage activity-photos | none | none | read, upload into an existing activity's folder, delete own | read, upload, delete any |
 
 ## Role-based access (RBAC)
 
@@ -80,6 +82,10 @@ Changed existing logic, and why: `youth` SELECT went from table-level to column-
 
 `07_user_management.sql` adds `archived_at` / `archived_by` to `profiles`. A trigger lets only an Admin archive or restore, never their own account; archiving also deactivates the account (so `get_user_role()` returns nothing and every policy denies access), restoring reactivates it, and an archived account cannot be reactivated without restoring. Deleting an account and resetting another user's password use the service role in a server action, but only after `log_user_admin_action()` has checked, with the Admin's own session, that the caller is an Admin acting on someone else, and written the audit entry. Deleting removes the sign-in and profile; youth, activity and attendance rows keep existing (their `created_by` becomes null) and the audit log keeps the actor's name.
 
+## Activity photos
+
+`09_activity_details.sql` adds `activity_photos` with RLS: Admin and Encoder read, add and edit captions; an Encoder may delete only photos they uploaded, an Admin any. Viewers and anonymous users get nothing. The `activity-photos` bucket is private (files are shown through signed links that expire after one hour), limited to 5 MB and JPEG, PNG or WebP. Uploads are allowed only into the folder of an activity that exists and is not deleted, and the storage delete rule checks the matching `activity_photos` row, so an Encoder cannot remove someone else's file. The uploader is stamped by a trigger from `auth.uid()`, not taken from the browser. Photo changes are audited.
+
 ## Encryption
 
 Mobile numbers are encrypted with `pgp_sym_encrypt` (pgcrypto). The key is created once and stored in Supabase Vault (`kk_contact_key`); only SECURITY DEFINER functions in the `private` schema can read it, and that schema is not exposed by the API. Numbers sit in a separate table, `youth_contacts`, with no direct grants. The only ways in are `set_youth_contact()` and `get_youth_contact()`, restricted to Admin and Encoder, and every reveal is audited. Self-registrations are encrypted by a trigger at insert time, so plaintext is never stored. Exports exclude contact numbers (data minimization).
@@ -104,4 +110,4 @@ Soft-deleted youth are kept 365 days, then an Admin runs `purge_soft_deleted()` 
 
 ## Tests
 
-`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 226 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It also checks a role matrix (what Viewer, Encoder and Admin can and cannot do), the Viewer's aggregate-only access (no individual rows from any table, view or function; "<3" for small counts), dashboard counts against the real rows (deleted and pending excluded), and the denied-access log. `npm run test:routes` checks every page guard and menu link against the RBAC matrix and that the service-role client never reaches client code. It applies 01 to 08 twice in order to prove they can be re-run. Run: `npm run test:db`.
+`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 251 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It also checks a role matrix (what Viewer, Encoder and Admin can and cannot do), the Viewer's aggregate-only access (no individual rows from any table, view or function; "<3" for small counts), dashboard counts against the real rows (deleted and pending excluded), the denied-access log, and activity details and photos (cleaning and checks, uploader stamp, folder rule, 40-photo limit, Viewer and anonymous blocked, delete own vs any, bucket limits and storage rules). `npm run test:routes` checks every page guard and menu link against the RBAC matrix and that the service-role client never reaches client code. It applies 01 to 09 twice in order to prove they can be re-run. Run: `npm run test:db`.

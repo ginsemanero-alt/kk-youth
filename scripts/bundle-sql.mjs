@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const dir = fileURLToPath(new URL('../supabase/', import.meta.url))
 export const PARTS = ['01_schema.sql', '02_security.sql', '04_form_fields_extra.sql', '05_form_settings.sql', '06_custom_questions.sql', '07_user_management.sql',
-  '08_viewer_aggregate_only.sql']
+  '08_viewer_aggregate_only.sql', '09_activity_details.sql']
 
 export function bundle() {
   const header = `-- =====================================================================

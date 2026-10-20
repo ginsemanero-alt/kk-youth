@@ -104,6 +104,20 @@ export const ACTIVITY_CATEGORIES = [
   { value: 'other', label: 'Other' },
 ]
 
+export const ACTIVITY_STATUS = [
+  { value: 'planned', label: 'Planned', tone: 'sky' },
+  { value: 'ongoing', label: 'Ongoing', tone: 'amber' },
+  { value: 'completed', label: 'Completed', tone: 'green' },
+  { value: 'cancelled', label: 'Cancelled', tone: 'rose' },
+] as const
+
+/** "08:00:00" -> "8:00 AM" */
+export function formatTime(t: string | null | undefined): string {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`
+}
+
 export const AGE_BRACKETS = [
   { value: '15-17', label: '15 to 17 (Child youth)', min: 15, max: 17 },
   { value: '18-24', label: '18 to 24 (Core youth)', min: 18, max: 24 },

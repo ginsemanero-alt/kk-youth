@@ -1,6 +1,6 @@
 # Database design
 
-Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`, `07_user_management.sql`, `08_viewer_aggregate_only.sql`. Re-running a file means running every later file again, in order.
+Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`, `07_user_management.sql`, `08_viewer_aggregate_only.sql`, `09_activity_details.sql`. Re-running a file means running every later file again, in order.
 
 ## ERD
 
@@ -11,6 +11,7 @@ erDiagram
   YOUTH ||--o| YOUTH_CONTACTS : "encrypted phone"
   YOUTH ||--o{ ATTENDANCE : attends
   ACTIVITIES ||--o{ ATTENDANCE : has
+  ACTIVITIES ||--o{ ACTIVITY_PHOTOS : has
   PUROKS ||--o{ PENDING_REGISTRATIONS : "chosen purok"
   PENDING_REGISTRATIONS }o--o| YOUTH : "approved into"
   PROFILES ||--o{ AUDIT_LOGS : "acts"
@@ -49,7 +50,8 @@ erDiagram
   CUSTOM_QUESTIONS { uuid id PK text label text question_type text_array options bool is_required bool is_active bool is_sensitive int sort_order }
   FORM_FIELDS { text field_key PK text label text section bool is_visible bool is_required bool is_sensitive int sort_order text depends_on FK }
   YOUTH_CONTACTS { uuid youth_id PK bytea contact_enc }
-  ACTIVITIES { uuid id PK text title date activity_date text category }
+  ACTIVITIES { uuid id PK text title date activity_date text category time start_time time end_time text status numeric budget }
+  ACTIVITY_PHOTOS { uuid id PK uuid activity_id FK text path UK text caption uuid uploaded_by }
   ATTENDANCE { uuid id PK uuid activity_id FK uuid youth_id FK }
   PENDING_REGISTRATIONS { uuid id PK registration_status_type status bytea contact_enc }
   AUDIT_LOGS { bigint id PK text action text table_name jsonb old_data jsonb new_data }
@@ -91,6 +93,10 @@ Added to both `youth` and `pending_registrations`: `email` (120, format checked)
 ## Custom questions (06)
 
 `custom_questions` (label, help_text, question_type: text / single_choice / multi_choice / yes_no, options, is_required, is_active, is_sensitive, sort_order). No hard delete (a trigger blocks it, even for the owner); type and sensitive flag cannot change after creation. Answers live in `custom_answers jsonb` on `youth` and `pending_registrations`, keyed by question id. `validate_custom_answers()` checks type, options, required, the 300-character text limit and unknown keys; answers to deactivated questions are kept on edit and dropped from new records. `approve_registration()` and `import_youth()` carry the answers.
+
+## Activity details and photos (09)
+
+`activities` gains `start_time`, `end_time` (end must be after start), `status` (planned, ongoing, completed, cancelled), `organizer`, `objectives`, `target_participants` (1 to 100000), `budget` (0 or more), `fund_source`, `partners`, `outcome` and `updated_at`; a trigger trims the text. `activity_photos` holds one row per photo in the private `activity-photos` bucket (5 MB, JPEG, PNG or WebP). A trigger stamps `uploaded_by` with the caller, requires the file to sit in the activity's own folder (`<activity_id>/...`), allows at most 40 photos per activity and keeps the path, activity and uploader unchanged on edit. The app shrinks photos to 1600 px JPEG in the browser before upload, which also removes location (EXIF) data.
 
 ## Views
 

@@ -12,6 +12,7 @@ const s5 = fs.readFileSync(dir + '05_form_settings.sql', 'utf8')
 const s6 = fs.readFileSync(dir + '06_custom_questions.sql', 'utf8')
 const s7 = fs.readFileSync(dir + '07_user_management.sql', 'utf8')
 const s8 = fs.readFileSync(dir + '08_viewer_aggregate_only.sql', 'utf8')
+const s9 = fs.readFileSync(dir + '09_activity_details.sql', 'utf8')
 const allInOne = fs.readFileSync(dir + 'all_in_one.sql', 'utf8')
 const { bundle } = await import('../../scripts/bundle-sql.mjs')
 
@@ -56,8 +57,9 @@ try {
   await db.exec(s6); console.log('06 applied')
   await db.exec(s7); console.log('07 applied')
   await db.exec(s8); console.log('08 applied')
-  for (const f of [s1, s2, s3, s4, s5, s6, s7, s8]) await db.exec(f)
-  console.log('re-applied 01 to 08 in order (idempotent)')
+  await db.exec(s9); console.log('09 applied')
+  for (const f of [s1, s2, s3, s4, s5, s6, s7, s8, s9]) await db.exec(f)
+  console.log('re-applied 01 to 09 in order (idempotent)')
   ok('all_in_one.sql is up to date (npm run sql:bundle)', allInOne === bundle())
   await db.exec(allInOne); console.log('all_in_one.sql applied on top (idempotent)')
   ok('seed puroks, idempotent', (await q('select count(*)::int c from puroks'))[0].c === 4)
@@ -582,6 +584,58 @@ try {
   await db.exec(`delete from auth.users where id='${id.enc2}'`)   // what the service role does
   ok('deleting the account removes the profile', (await q(`select count(*)::int c from profiles where id='${id.enc2}'`))[0].c === 0)
   ok('records made by a deleted user are kept', (await q(`select count(*)::int c from youth`))[0].c === before && (await q(`select created_by from youth where id='${y1.id}'`))[0].created_by === null)
+
+  // ===== Activity details and photos =====
+  const det = (await asUser(id.enc, `update activities set start_time='08:00', end_time='11:30', status='completed', organizer='  SK Committee on Environment ',
+    objectives='Clean the riverbank', target_participants=50, budget=2500.50, fund_source='SK Fund', partners='BFP, CENRO', outcome='Collected 30 sacks'
+    where id='${act.id}' returning organizer, status, budget, updated_at`)).rows[0]
+  ok('encoder records activity details (cleaned)', det && det.organizer === 'SK Committee on Environment' && det.status === 'completed' && Number(det.budget) === 2500.5, JSON.stringify(det))
+  e = await err(id.enc, `update activities set start_time='12:00', end_time='09:00' where id='${act.id}'`)
+  ok('end time must be after start time', e && e.includes('activities_time_order'), e)
+  e = await err(id.enc, `update activities set status='done' where id='${act.id}'`)
+  ok('unknown activity status rejected', e && /check/.test(e), e)
+  e = await err(id.enc, `update activities set budget=-1 where id='${act.id}'`)
+  ok('negative budget rejected', e && /check/.test(e), e)
+  ok('viewer cannot edit activity details (0 rows)', (await asUser(id.view, `update activities set status='cancelled' where id='${act.id}' returning id`)).rows.length === 0)
+
+  const photo = (n) => `insert into activity_photos (activity_id, path, caption) values ('${act.id}', '${act.id}/${n}.jpg', ' Team  photo ') returning id, uploaded_by, caption`
+  const ph1 = (await asUser(id.enc, photo('a'))).rows[0]
+  ok('encoder adds a photo; uploader stamped by the database', ph1 && ph1.uploaded_by === id.enc && ph1.caption === 'Team photo', JSON.stringify(ph1))
+  e = await err(id.enc, `insert into activity_photos (activity_id, path) values ('${act.id}', 'other-folder/x.jpg')`)
+  ok('photo must be in the activity folder', e && e.includes('activity id'), e)
+  e = await err(id.view, photo('v'))
+  ok('viewer cannot add photos', e && /row-level security/.test(e), e)
+  ok('viewer cannot see photos', (await asUser(id.view, `select id from activity_photos`)).rows.length === 0)
+  e = await anonErr(`select id from activity_photos`)
+  ok('anon cannot see photos', e && /permission denied/.test(e), e)
+  const ph2 = (await asUser(id.admin, photo('b'))).rows[0]
+  ok('encoder cannot delete a photo someone else uploaded (0 rows)', (await asUser(id.enc, `delete from activity_photos where id='${ph2.id}' returning id`)).rows.length === 0)
+  ok('encoder can edit a caption', (await asUser(id.enc, `update activity_photos set caption='Group shot' where id='${ph2.id}' returning caption`)).rows[0]?.caption === 'Group shot')
+  e = await err(id.enc, `update activity_photos set path='x/y.jpg' where id='${ph2.id}'`)
+  ok('photo path cannot be changed', e && /permission denied/.test(e), e)
+  ok('encoder deletes own photo', (await asUser(id.enc, `delete from activity_photos where id='${ph1.id}' returning id`)).rows.length === 1)
+  ok('admin deletes any photo', (await asUser(id.admin, `delete from activity_photos where id='${ph2.id}' returning id`)).rows.length === 1)
+  ok('photo uploads and deletions are audited', (await q(`select count(*)::int c from audit_logs where table_name='activity_photos'`))[0].c >= 4)
+  for (let i = 0; i < 40; i++) await db.exec(`insert into activity_photos (activity_id, path) values ('${act.id}', '${act.id}/bulk${i}.jpg')`)
+  e = await err(id.enc, photo('over'))
+  ok('at most 40 photos per activity', e && e.includes('40'), e)
+  await db.exec(`delete from activity_photos where activity_id='${act.id}'`)
+
+  const bk = (await q(`select public, file_size_limit, allowed_mime_types from storage.buckets where id='activity-photos'`))[0]
+  ok('activity photo bucket is private, images only, 5 MB', bk.public === false && Number(bk.file_size_limit) === 5242880 && bk.allowed_mime_types.includes('image/jpeg') && !bk.allowed_mime_types.includes('application/pdf'))
+  await db.exec(`grant delete on storage.objects to authenticated`)
+  e = await err(id.view, `insert into storage.objects (bucket_id, name) values ('activity-photos', '${act.id}/v.jpg')`)
+  ok('viewer cannot upload activity photo files', e && /row-level security/.test(e), e)
+  e = await err(id.enc, `insert into storage.objects (bucket_id, name) values ('activity-photos', 'not-an-activity/x.jpg')`)
+  ok('photo files must go into an existing activity folder', e && /row-level security/.test(e), e)
+  ok('encoder uploads a photo file', (await asUser(id.enc, `insert into storage.objects (bucket_id, name) values ('activity-photos', '${act.id}/e.jpg') returning name`)).rows.length === 1)
+  await asUser(id.admin, `insert into storage.objects (bucket_id, name) values ('activity-photos', '${act.id}/adm.jpg')`)
+  await asUser(id.admin, `insert into activity_photos (activity_id, path) values ('${act.id}', '${act.id}/adm.jpg')`)
+  await asUser(id.enc, `insert into activity_photos (activity_id, path) values ('${act.id}', '${act.id}/e.jpg')`)
+  ok('viewer cannot list activity photo files', (await asUser(id.view, `select name from storage.objects where bucket_id='activity-photos'`)).rows.length === 0)
+  ok("encoder cannot delete another user's photo file (0 rows)", (await asUser(id.enc, `delete from storage.objects where bucket_id='activity-photos' and name='${act.id}/adm.jpg' returning name`)).rows.length === 0)
+  ok('encoder deletes own photo file', (await asUser(id.enc, `delete from storage.objects where bucket_id='activity-photos' and name='${act.id}/e.jpg' returning name`)).rows.length === 1)
+  ok('admin deletes any photo file', (await asUser(id.admin, `delete from storage.objects where bucket_id='activity-photos' and name='${act.id}/adm.jpg' returning name`)).rows.length === 1)
 
   ok('every public table has RLS enabled', (await q(`select count(*)::int c from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity`))[0].c === 0)
 } catch (x) {

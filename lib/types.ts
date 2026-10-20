@@ -98,6 +98,34 @@ export interface ActivityStat extends Activity {
   participation_rate: number
 }
 
+export type ActivityStatus = 'planned' | 'ongoing' | 'completed' | 'cancelled'
+
+/** Full activity row (09_activity_details.sql). Admin and Encoder only. */
+export interface ActivityDetail extends Activity {
+  start_time: string | null
+  end_time: string | null
+  status: ActivityStatus
+  organizer: string | null
+  objectives: string | null
+  target_participants: number | null
+  budget: number | null
+  fund_source: string | null
+  partners: string | null
+  outcome: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** A photo of an activity, stored in the private activity-photos bucket. */
+export interface ActivityPhoto {
+  id: string
+  activity_id: string
+  path: string
+  caption: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export interface PendingRegistration {
   id: string
   first_name: string
