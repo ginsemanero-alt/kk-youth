@@ -1,5 +1,6 @@
 import { requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { Profile } from '@/lib/types'
 import { PageHeader } from '@/components/ui'
 import UserManager from './UserManager'
@@ -11,10 +12,19 @@ export default async function UsersPage() {
   const session = await requireRole(['admin'])
   const supabase = await createClient()
   const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+  // Email addresses live in Supabase Auth, which only the service role can list (server side).
+  const serviceKeySet = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const emails: Record<string, string> = {}
+  if (serviceKeySet) {
+    try {
+      const { data: list } = await createAdminClient().auth.admin.listUsers({ perPage: 1000 })
+      for (const u of list?.users ?? []) if (u.email) emails[u.id] = u.email
+    } catch { /* emails are optional */ }
+  }
   return (
     <div>
-      <PageHeader eyebrow="Access control" title="Users and roles" subtitle="Roles are stored in the database and enforced by Row Level Security. Changes take effect immediately." />
-      <UserManager users={(data ?? []) as Profile[]} meId={session.userId} serviceKeySet={Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)} />
+      <PageHeader eyebrow="Access control" title="Users and roles" subtitle="Create accounts, change roles, rename, reset passwords, archive or delete. Roles are enforced by the database; changes take effect immediately." />
+      <UserManager users={(data ?? []) as Profile[]} emails={emails} meId={session.userId} serviceKeySet={serviceKeySet} />
     </div>
   )
 }

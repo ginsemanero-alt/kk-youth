@@ -10,6 +10,7 @@ const s3 = fs.readFileSync(dir + '03_seed.sql', 'utf8')
 const s4 = fs.readFileSync(dir + '04_form_fields_extra.sql', 'utf8')
 const s5 = fs.readFileSync(dir + '05_form_settings.sql', 'utf8')
 const s6 = fs.readFileSync(dir + '06_custom_questions.sql', 'utf8')
+const s7 = fs.readFileSync(dir + '07_user_management.sql', 'utf8')
 const allInOne = fs.readFileSync(dir + 'all_in_one.sql', 'utf8')
 const { bundle } = await import('../../scripts/bundle-sql.mjs')
 
@@ -52,8 +53,9 @@ try {
   await db.exec(s3); await db.exec(s4); console.log('04 applied')
   await db.exec(s5); console.log('05 applied')
   await db.exec(s6); console.log('06 applied')
-  for (const f of [s1, s2, s3, s4, s5, s6]) await db.exec(f)
-  console.log('re-applied 01 to 06 in order (idempotent)')
+  await db.exec(s7); console.log('07 applied')
+  for (const f of [s1, s2, s3, s4, s5, s6, s7]) await db.exec(f)
+  console.log('re-applied 01 to 07 in order (idempotent)')
   ok('all_in_one.sql is up to date (npm run sql:bundle)', allInOne === bundle())
   await db.exec(allInOne); console.log('all_in_one.sql applied on top (idempotent)')
   ok('seed puroks, idempotent', (await q('select count(*)::int c from puroks'))[0].c === 4)
@@ -512,6 +514,34 @@ try {
   await db.exec(`update profiles set is_active=false where id='${id.enc2}'`)
   e = await err(id.enc2, mk({ first_name: 'Blocked', last_name: 'User' }))
   ok('deactivated user is locked out', e && /row-level security/.test(e), e)
+  // ===== User management: archive, rename, delete hook =====
+  ok('admin can rename a user', (await asUser(id.admin, `update profiles set full_name='  Viewer   Renamed ' where id='${id.view}' returning full_name`)).rows[0]?.full_name === 'Viewer Renamed')
+  ok('encoder cannot rename another user (0 rows)', (await asUser(id.enc, `update profiles set full_name='x' where id='${id.view}' returning id`)).rows.length === 0)
+  ok('encoder cannot archive anyone (0 rows)', (await asUser(id.enc, `update profiles set archived_at=now() where id in ('${id.enc}', '${id.view}') returning id`)).rows.length === 0)
+  e = await err(id.admin, `update profiles set archived_at=now() where id='${id.admin}'`)
+  ok('admin cannot archive own account', e && e.includes('own account'), e)
+  const arch = (await asUser(id.admin, `update profiles set archived_at=now() where id='${id.view}' returning archived_at, archived_by, is_active`)).rows[0]
+  ok('admin archives a user: stamped and deactivated', arch && arch.archived_at && arch.archived_by === id.admin && arch.is_active === false, JSON.stringify(arch))
+  ok('archived user has no access', (await asUser(id.view, `select id from youth_overview`)).rows.length === 0)
+  e = await err(id.admin, `update profiles set is_active=true where id='${id.view}'`)
+  ok('archived account cannot be reactivated without restoring', e && e.includes('Restore the account'), e)
+  const rest = (await asUser(id.admin, `update profiles set archived_at=null where id='${id.view}' returning archived_at, is_active`)).rows[0]
+  ok('restore brings the account back active', rest && rest.archived_at === null && rest.is_active === true, JSON.stringify(rest))
+  ok('restored user has access again', (await asUser(id.view, `select id from youth_overview`)).rows.length > 0)
+  ok('archive and restore are audited', (await q(`select count(*)::int c from audit_logs where table_name='profiles' and action='update' and record_id='${id.view}' and (new_data -> 'archived_at') is not null`))[0].c === 2)
+
+  e = await err(id.enc, `select log_user_admin_action('${id.view}', 'delete')`)
+  ok('encoder cannot delete users', e && e.includes('Not allowed'), e)
+  e = await err(id.admin, `select log_user_admin_action('${id.admin}', 'delete')`)
+  ok('admin cannot delete own account', e && e.includes('own account'), e)
+  ok('admin delete is checked and audited first', (await asUser(id.admin, `select log_user_admin_action('${id.enc2}', 'delete') as n`)).rows[0].n === 'User enc2')
+  ok('delete audit names the user', (await q(`select count(*)::int c from audit_logs where action='delete' and table_name='profiles' and detail->>'user' = 'User enc2'`))[0].c === 1)
+  const before = (await q(`select count(*)::int c from youth`))[0].c
+  await db.exec(`update youth set created_by='${id.enc2}' where id='${y1.id}'`)
+  await db.exec(`delete from auth.users where id='${id.enc2}'`)   // what the service role does
+  ok('deleting the account removes the profile', (await q(`select count(*)::int c from profiles where id='${id.enc2}'`))[0].c === 0)
+  ok('records made by a deleted user are kept', (await q(`select count(*)::int c from youth`))[0].c === before && (await q(`select created_by from youth where id='${y1.id}'`))[0].created_by === null)
+
   ok('every public table has RLS enabled', (await q(`select count(*)::int c from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity`))[0].c === 0)
 } catch (x) {
   console.log('FATAL', x.message); fail++

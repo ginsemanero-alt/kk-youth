@@ -8,7 +8,7 @@ Roles live in `public.profiles.role`. `get_user_role()` (SECURITY DEFINER) retur
 
 | Table | anon | viewer | encoder | admin |
 |---|---|---|---|---|
-| profiles | none | own row | own row | all; update role, status, name |
+| profiles | none | own row | own row | all; update role, status, name, archive/restore (not own); delete and password reset through audited server actions |
 | puroks | read active | read | read | read, add, edit, soft delete |
 | youth | none | read active (no sensitive columns) | read, add, edit | read incl. deleted, add, edit, soft delete and restore |
 | youth_sensitive (view) | none | no rows | read active | read incl. deleted |
@@ -44,6 +44,10 @@ Changed existing logic, and why: `youth` SELECT went from table-level to column-
 
 `custom_questions`: anon reads active questions; staff read all (to label old answers). Only an Admin may insert or update, and only through column grants that leave out `question_type` and `is_sensitive` on update. Delete has an explicit deny policy, no grant, and a trigger that blocks it even for the database owner. Changes are audited. `custom_answers` on `youth` is not granted to any API role (`private.grant_youth_select()`); answers are read through `youth_custom_answers`, which gives sensitive answers only to Admin and Encoder. `get_sensitive_answers_bulk()` (Admin only, logged) is used for exports. `audit_mask()` replaces the answers to sensitive questions in the audit log with a marker.
 
+## User management
+
+`07_user_management.sql` adds `archived_at` / `archived_by` to `profiles`. A trigger lets only an Admin archive or restore, never their own account; archiving also deactivates the account (so `get_user_role()` returns nothing and every policy denies access), restoring reactivates it, and an archived account cannot be reactivated without restoring. Deleting an account and resetting another user's password use the service role in a server action, but only after `log_user_admin_action()` has checked, with the Admin's own session, that the caller is an Admin acting on someone else, and written the audit entry. Deleting removes the sign-in and profile; youth, activity and attendance rows keep existing (their `created_by` becomes null) and the audit log keeps the actor's name.
+
 ## Encryption
 
 Mobile numbers are encrypted with `pgp_sym_encrypt` (pgcrypto). The key is created once and stored in Supabase Vault (`kk_contact_key`); only SECURITY DEFINER functions in the `private` schema can read it, and that schema is not exposed by the API. Numbers sit in a separate table, `youth_contacts`, with no direct grants. The only ways in are `set_youth_contact()` and `get_youth_contact()`, restricted to Admin and Encoder, and every reveal is audited. Self-registrations are encrypted by a trigger at insert time, so plaintext is never stored. Exports exclude contact numbers (data minimization).
@@ -68,4 +72,4 @@ Soft-deleted youth are kept 365 days, then an Admin runs `purge_soft_deleted()` 
 
 ## Tests
 
-`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 188 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It also checks a role matrix (what Viewer, Encoder and Admin can and cannot do). It applies 01 to 06 twice in order to prove they can be re-run. Run: `npm run test:db`.
+`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 204 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It also checks a role matrix (what Viewer, Encoder and Admin can and cannot do). It applies 01 to 06 twice in order to prove they can be re-run. Run: `npm run test:db`.

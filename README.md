@@ -12,7 +12,7 @@ Youth registry with duplicate detection, purok management, dashboard analytics (
 
 1. **Install**: `npm install` (Node 20.9 or newer).
 2. **Supabase project**: create one at https://supabase.com. In Dashboard > Database > Extensions make sure `pgcrypto` and `supabase_vault` are enabled (they are by default).
-3. **Run the SQL** in Dashboard > SQL Editor. **Quickest:** open `supabase/all_in_one.sql`, paste the whole file and click Run (it contains 01, 02, 04, 05 and 06 in order, and is safe to re-run). Run `supabase/03_seed.sql` separately only if you want sample puroks. After editing any SQL file, rebuild the bundle with `npm run sql:bundle` (the tests fail if it is out of date).
+3. **Run the SQL** in Dashboard > SQL Editor. **Quickest:** open `supabase/all_in_one.sql`, paste the whole file and click Run (it contains 01, 02, 04, 05, 06 and 07 in order, and is safe to re-run). Run `supabase/03_seed.sql` separately only if you want sample puroks. After editing any SQL file, rebuild the bundle with `npm run sql:bundle` (the tests fail if it is out of date).
 
    Or run the files one at a time, in this order:
    1. `supabase/01_schema.sql`
@@ -21,6 +21,7 @@ Youth registry with duplicate detection, purok management, dashboard analytics (
    4. `supabase/04_form_fields_extra.sql` (fields from the paper Youth Profile Form)
    5. `supabase/05_form_settings.sql` (Admin form settings)
    6. `supabase/06_custom_questions.sql` (Admin's own questions)
+   7. `supabase/07_user_management.sql` (archive accounts, audited delete and password reset)
 
    All files can be re-run safely. If you re-run any file, run every later file again in order afterwards (for example, 02 resets grants and 04 and 06 redefine the approval and import functions).
 4. **Environment**: copy `.env.example` to `.env.local` and fill in:
@@ -43,13 +44,14 @@ Push to GitHub, import the repo in Vercel, add the four environment variables, d
 
 - **SheetJS**: `package.json` installs `xlsx` from the official SheetJS CDN (version 0.20.3) because the npm registry copy (0.18.5) has known vulnerabilities. If your network blocks cdn.sheetjs.com, run `npm i xlsx@0.18.5` and only import files you trust.
 - **Account page**: every user can change their own password at `/account` (the current password is re-checked first).
+- **Users page** (Admin): create accounts, change roles, rename, reset another user's password, deactivate, archive (hidden and blocked from signing in, can be restored) and delete permanently (type the name to confirm). Nobody can archive, delete or demote their own account. Deleting keeps the youth records and audit entries the user made. Creating, deleting and resetting passwords need `SUPABASE_SERVICE_ROLE_KEY` on the server.
 - **Printing**: Reports has a Print button with a clean print layout. Printing is recorded in the audit log like an export.
 - **Bundle size**: Recharts, SheetJS and jsPDF are loaded on demand (dynamic import).
 - **Windows**: `npm run test:db` works on Windows and Linux. On a low-memory PC, test with `npm run build` then `npm start` instead of `npm run dev`.
 - **Rate limiting**: before a public launch, put a CAPTCHA (Cloudflare Turnstile or Supabase CAPTCHA) in front of the self-registration form.
 - **Imports** are marked with consent source "import". The importing user confirms that signed consent forms are on file; under-18 rows need a guardian name.
 - Exports never include contact numbers or email addresses. Religion, disability, medical and sensitive question answers are exported only when an Admin ticks "Include sensitive information" on the Reports page (the read is logged).
-- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (188 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
+- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (204 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
 
 ## Form settings (Admin)
 

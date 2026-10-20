@@ -10,12 +10,12 @@ export default function Modal({ title, onClose, children }: { title: string; onC
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/60 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex animate-fade items-end justify-center bg-ink/60 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[3rem] bg-white p-7 shadow-2xl sm:p-9"
+        className="max-h-[92vh] w-full max-w-lg animate-pop overflow-y-auto rounded-[3rem] bg-white p-7 shadow-2xl sm:p-9"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-start justify-between gap-4">

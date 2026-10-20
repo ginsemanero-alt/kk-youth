@@ -146,6 +146,8 @@ export interface Profile {
   role: Role
   is_active: boolean
   created_at: string
+  /** Set when an Admin archives the account (it is then also inactive). Needs 07_user_management.sql. */
+  archived_at?: string | null
 }
 
 export interface AuditLog {

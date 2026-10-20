@@ -1,6 +1,6 @@
 # Database design
 
-Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`. Re-running a file means running every later file again, in order.
+Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`, `07_user_management.sql`. Re-running a file means running every later file again, in order.
 
 ## ERD
 
@@ -18,7 +18,7 @@ erDiagram
   CUSTOM_QUESTIONS ||--o{ YOUTH : "answered in custom_answers"
   CUSTOM_QUESTIONS ||--o{ PENDING_REGISTRATIONS : "answered in custom_answers"
 
-  PROFILES { uuid id PK text full_name app_role role bool is_active }
+  PROFILES { uuid id PK text full_name app_role role bool is_active timestamptz archived_at }
   PUROKS { uuid id PK text name timestamptz deleted_at }
   YOUTH {
     uuid id PK
