@@ -325,7 +325,7 @@ export default function ImportWizard({ puroks, settings, questions }: { puroks: 
             </div>
           )}
           <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-[2rem] bg-slate-50 p-5 ring-1 ring-black/5">
-            <input type="checkbox" className="mt-1 h-5 w-5 accent-[#1d4ed8]" checked={attest} onChange={(e) => setAttest(e.target.checked)} />
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-brand" checked={attest} onChange={(e) => setAttest(e.target.checked)} />
             <span className="text-sm font-bold">
               I confirm that signed data privacy consent forms are on file for these youth, including parent or guardian consent for those below 18
               {sensitiveAsked(rules, questions) ? ', and that rows with religion, disability, medical or sensitive question answers have the consent version that covers sensitive information' : ''}.

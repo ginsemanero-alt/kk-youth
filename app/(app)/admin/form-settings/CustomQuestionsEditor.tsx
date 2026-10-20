@@ -130,7 +130,7 @@ export default function CustomQuestionsEditor({ questions, onChange }: { questio
                     </Field>
                   )}
                   <label className="flex items-center gap-2 text-sm font-bold">
-                    <input type="checkbox" className="h-5 w-5 accent-[#1d4ed8]" checked={edit.is_required} onChange={(e) => setEdit({ ...edit, is_required: e.target.checked })} /> Required
+                    <input type="checkbox" className="h-5 w-5 accent-brand" checked={edit.is_required} onChange={(e) => setEdit({ ...edit, is_required: e.target.checked })} /> Required
                   </label>
                   <p className="text-xs font-semibold text-slate-400">The type ({typeLabel(q.question_type)}) and the sensitive setting cannot be changed. Deactivate this question and add a new one instead.</p>
                   <div className="flex gap-2">
@@ -189,10 +189,10 @@ export default function CustomQuestionsEditor({ questions, onChange }: { questio
         )}
         <div className="flex flex-wrap gap-5">
           <label className="flex items-center gap-2 text-sm font-bold">
-            <input type="checkbox" className="h-5 w-5 accent-[#1d4ed8]" checked={draft.is_required} onChange={(e) => setDraft({ ...draft, is_required: e.target.checked })} /> Required
+            <input type="checkbox" className="h-5 w-5 accent-brand" checked={draft.is_required} onChange={(e) => setDraft({ ...draft, is_required: e.target.checked })} /> Required
           </label>
           <label className="flex items-center gap-2 text-sm font-bold text-red-800">
-            <input type="checkbox" className="h-5 w-5 accent-[#dc2626]" checked={draft.is_sensitive} onChange={(e) => setDraft({ ...draft, is_sensitive: e.target.checked })} /> Sensitibo
+            <input type="checkbox" className="h-5 w-5 accent-flag" checked={draft.is_sensitive} onChange={(e) => setDraft({ ...draft, is_sensitive: e.target.checked })} /> Sensitibo
           </label>
         </div>
         {draft.is_sensitive && (

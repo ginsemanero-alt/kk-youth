@@ -64,7 +64,7 @@ export default function DashboardCharts({ data }: { data: DashboardSummary }) {
             <XAxis dataKey="label" tick={tick} />
             <YAxis allowDecimals={false} tick={tick} />
             <Tooltip contentStyle={tip} cursor={{ fill: '#f1f5f9' }} />
-            <Bar dataKey="count" name="Youth" fill="#1d4ed8" radius={[18, 18, 0, 0]} />
+            <Bar dataKey="count" name="Youth" fill="#0937b1" radius={[18, 18, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -72,7 +72,7 @@ export default function DashboardCharts({ data }: { data: DashboardSummary }) {
       <ChartCard title="In school vs out of school">
         <Donut data={[
           { name: 'In-School', value: data.in_school, color: '#0ea5e9' },
-          { name: 'OSY', value: data.out_of_school, color: '#dc2626' },
+          { name: 'OSY', value: data.out_of_school, color: '#ca0e1c' },
           { name: 'Graduated', value: data.graduated, color: '#059669' },
         ]} />
       </ChartCard>
@@ -82,15 +82,15 @@ export default function DashboardCharts({ data }: { data: DashboardSummary }) {
       </ChartCard>
 
       <ChartCard title="Youth per purok">
-        <HBars items={data.puroks} color="#0a1230" />
+        <HBars items={data.puroks} color="#0b1238" />
       </ChartCard>
 
       <ChartCard title="Top skills">
-        <HBars items={data.top_skills} color="#facc15" />
+        <HBars items={data.top_skills} color="#fad316" />
       </ChartCard>
 
       <ChartCard title="Top interests">
-        <HBars items={data.top_interests} color="#dc2626" />
+        <HBars items={data.top_interests} color="#ca0e1c" />
       </ChartCard>
     </div>
   )

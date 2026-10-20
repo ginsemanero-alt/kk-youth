@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Inbox, TriangleAlert, CircleCheck, Info } from 'lucide-react'
 import type { EducationStatus, EmploymentStatus, RegistrationStatus, Role } from '@/lib/types'
+import { TriStripe } from '@/components/Logo'
 
 // ---------- class tokens ----------
 const btn = 'inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50'
@@ -32,7 +33,8 @@ export function PageHeader({ eyebrow, title, subtitle, right }: { eyebrow?: stri
           <span className="inline-block rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest text-ink">{eyebrow}</span>
         )}
         <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">{title}</h1>
-        {subtitle && <p className="mt-2 max-w-2xl font-semibold text-slate-500">{subtitle}</p>}
+        <TriStripe className="mt-4 h-1.5 w-20 rounded-full" />
+        {subtitle && <p className="mt-3 max-w-2xl font-semibold text-slate-500">{subtitle}</p>}
       </div>
       {right && <div className="flex flex-wrap gap-2">{right}</div>}
     </div>

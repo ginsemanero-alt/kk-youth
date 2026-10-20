@@ -1,7 +1,6 @@
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { Card } from '@/components/ui'
-import { CONSENT_VERSION, CONSENT_VERSION_SPI } from '@/lib/constants'
+import PublicHeader from '@/components/PublicHeader'
+import { CONSENT_VERSION, CONSENT_VERSION_SPI, ORG } from '@/lib/constants'
 
 export const metadata = { title: 'Privacy notice' }
 
@@ -27,9 +26,10 @@ const SECTIONS: { title: string; body: string[] }[] = [
 
 export default function PrivacyPage() {
   return (
+    <>
+    <PublicHeader />
     <main className="mx-auto max-w-3xl px-4 py-12 sm:px-8">
-      <Link href="/" className="mb-6 inline-flex items-center gap-2 text-sm font-black text-slate-500 hover:text-ink"><ArrowLeft className="h-4 w-4" /> Home</Link>
-      <span className="block w-fit rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest">Privacy notice</span>
+      <span className="block w-fit rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest">Privacy notice, {ORG.sk}</span>
       <h1 className="mt-3 text-5xl font-black tracking-tight">How we handle your data</h1>
       <p className="mt-3 font-semibold text-slate-500">Version {CONSENT_VERSION}. Prepared under the Data Privacy Act of 2012 (RA 10173).</p>
       <div className="mt-8 space-y-5">
@@ -41,5 +41,6 @@ export default function PrivacyPage() {
         ))}
       </div>
     </main>
+    </>
   )
 }

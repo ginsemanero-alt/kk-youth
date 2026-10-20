@@ -1,5 +1,12 @@
 import type { CivilStatus, EducationLevel, EducationStatus, EmploymentSector, EmploymentStatus, Role, Sex } from './types'
 
+/** The barangay and SK this deployment belongs to (shown with the logo). */
+export const ORG = {
+  barangay: 'Barangay Bubog',
+  sk: 'Sangguniang Kabataan ng Barangay Bubog',
+  short: 'SK Barangay Bubog',
+}
+
 /**
  * Consent versions. v1.1 follows the paper SK Youth Profile Form. When the Admin shows any
  * sensitive field (religion, disability, medical), the form uses the -SPI version, which adds

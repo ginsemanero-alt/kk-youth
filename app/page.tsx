@@ -2,6 +2,8 @@ import Link from 'next/link'
 import {
   Activity, ArrowRight, BarChart3, ClipboardCheck, FileSpreadsheet, Fingerprint, LifeBuoy, Lock, QrCode, ScrollText, ShieldCheck, Users,
 } from 'lucide-react'
+import { BrandMark, Logo, TriStripe } from '@/components/Logo'
+import { ORG } from '@/lib/constants'
 
 const MODULES = [
   { icon: Users, title: 'Youth registry', text: 'One profile per youth with automatic age brackets and duplicate detection.', tone: 'bg-brand text-white' },
@@ -23,47 +25,52 @@ export default function Home() {
   return (
     <div>
       <header className="absolute inset-x-0 top-0 z-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-8">
-          <span className="flex items-center gap-3 font-black text-white">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sun text-ink"><ShieldCheck className="h-6 w-6" aria-hidden /></span>
-            KK Youth Profiling
-          </span>
-          <nav className="flex items-center gap-2">
+        <TriStripe />
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-8">
+          <BrandMark tone="light" size={46} preload />
+          <nav className="flex shrink-0 items-center gap-2">
             <Link href="/privacy" className="hidden rounded-full px-4 py-2 text-sm font-black text-white/80 hover:text-white sm:block">Privacy</Link>
             <Link href="/login" className="rounded-full bg-white/10 px-5 py-2.5 text-sm font-black text-white ring-1 ring-white/20 hover:bg-white/20">Staff sign in</Link>
           </nav>
         </div>
       </header>
 
-      <section className="relative overflow-hidden bg-ink px-4 pb-28 pt-36 text-white sm:px-8">
-        <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-brand/70 blur-3xl" aria-hidden />
-        <div className="absolute -bottom-40 left-1/4 h-[26rem] w-[26rem] rounded-full bg-flag/30 blur-3xl" aria-hidden />
-        <div className="relative mx-auto max-w-6xl">
-          <span className="inline-block rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest text-ink">Sangguniang Kabataan</span>
-          <h1 className="mt-6 max-w-4xl text-5xl font-black leading-[1.02] tracking-tight sm:text-7xl">
-            Every young person counted. Every program <span className="text-sun">aimed right.</span>
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg font-semibold text-white/75">
-            A youth profiling and management system for barangay SK. Replace scattered spreadsheets with one secure registry that feeds your Comprehensive Barangay Youth Development Plan.
-          </p>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <Link href="/register" className="inline-flex items-center gap-2 rounded-full bg-sun px-8 py-4 text-base font-black text-ink shadow-xl shadow-sun/20 transition hover:brightness-95 active:scale-95">
-              I am a youth, register me <ArrowRight className="h-5 w-5" aria-hidden />
-            </Link>
-            <Link href="/login" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-8 py-4 text-base font-black text-white ring-1 ring-white/25 transition hover:bg-white/20 active:scale-95">
-              SK staff sign in
-            </Link>
+      <section className="relative overflow-hidden bg-linear-to-br from-ink via-ink to-brand-deep px-4 pb-24 pt-32 text-white sm:px-8 lg:pt-36">
+        <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-brand/60 blur-3xl" aria-hidden />
+        <div className="absolute -bottom-40 left-1/4 h-[26rem] w-[26rem] rounded-full bg-flag/25 blur-3xl" aria-hidden />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.25fr_1fr] lg:gap-12">
+          <div>
+            <span className="inline-block rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest text-ink">{ORG.sk}</span>
+            <h1 className="mt-6 max-w-4xl text-5xl font-black leading-[1.02] tracking-tight sm:text-7xl">
+              Every young person counted. Every program <span className="text-sun">aimed right.</span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg font-semibold text-white/75">
+              The Katipunan ng Kabataan profiling system of {ORG.barangay}. One secure registry for youth aged 15 to 30 that feeds the Comprehensive Barangay Youth Development Plan.
+            </p>
+            <div className="mt-10 flex flex-wrap gap-3">
+              <Link href="/register" className="inline-flex items-center gap-2 rounded-full bg-sun px-8 py-4 text-base font-black text-ink shadow-xl shadow-sun/20 transition hover:brightness-95 active:scale-95">
+                I am a youth, register me <ArrowRight className="h-5 w-5" aria-hidden />
+              </Link>
+              <Link href="/login" className="inline-flex items-center gap-2 rounded-full bg-white/10 px-8 py-4 text-base font-black text-white ring-1 ring-white/25 transition hover:bg-white/20 active:scale-95">
+                SK staff sign in
+              </Link>
+            </div>
           </div>
-          <dl className="mt-16 grid max-w-3xl grid-cols-3 gap-4">
-            {[['15 to 30', 'Age coverage'], ['3 roles', 'Admin, Encoder, Viewer'], ['RA 10173', 'Privacy-aware']].map(([v, l]) => (
-              <div key={l} className="rounded-[2rem] bg-white/10 p-5 ring-1 ring-white/10">
-                <dt className="text-xs font-bold uppercase tracking-widest text-white/60">{l}</dt>
-                <dd className="mt-1 text-2xl font-black sm:text-3xl">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="relative order-first mx-auto w-40 sm:w-60 lg:order-none lg:w-full lg:max-w-sm">
+            <div className="absolute inset-0 scale-110 rounded-full bg-sun/30 blur-3xl" aria-hidden />
+            <Logo size={420} preload className="relative h-auto w-full !ring-8 !ring-white/90 shadow-2xl" />
+          </div>
         </div>
+        <dl className="relative mx-auto mt-16 grid max-w-6xl grid-cols-3 gap-3 sm:gap-4">
+          {[['15 to 30', 'Age coverage'], ['3 roles', 'Admin, Encoder, Viewer'], ['RA 10173', 'Privacy-aware']].map(([v, l]) => (
+            <div key={l} className="rounded-[2rem] bg-white/10 p-4 ring-1 ring-white/10 backdrop-blur sm:p-5">
+              <dt className="text-[10px] font-bold uppercase tracking-widest text-white/60 sm:text-xs">{l}</dt>
+              <dd className="mt-1 text-xl font-black sm:text-3xl">{v}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
+      <TriStripe className="h-2" />
 
       <section className="mx-auto max-w-6xl px-4 py-24 sm:px-8">
         <h2 className="text-4xl font-black tracking-tight sm:text-5xl">Everything the SK needs, in one place</h2>
@@ -98,7 +105,8 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-8">
-        <div className="rounded-[3.5rem] bg-brand p-10 text-white sm:p-16">
+        <div className="relative isolate overflow-hidden rounded-[3.5rem] bg-linear-to-br from-brand to-brand-deep p-10 text-white sm:p-16">
+          <div className="absolute -right-10 -top-10 -z-10 h-48 w-48 rounded-full bg-sun/25 blur-2xl" aria-hidden />
           <ClipboardCheck className="h-10 w-10 text-sun" aria-hidden />
           <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">Are you between 15 and 30?</h2>
           <p className="mt-3 max-w-xl font-semibold text-white/80">Fill out the short form. An SK encoder will review it before your profile is added.</p>
@@ -108,8 +116,13 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="border-t border-black/5 px-4 py-8 text-center text-sm font-semibold text-slate-500">
-        KK Youth Profiling System. Academic capstone project (BSIT). <Link href="/privacy" className="font-black text-ink underline">Privacy notice</Link>
+      <footer className="bg-ink px-4 py-10 text-white sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+          <BrandMark tone="light" size={44} />
+          <p className="text-sm font-semibold text-white/60">
+            {ORG.sk}. Academic capstone project (BSIT). <Link href="/privacy" className="font-black text-white underline">Privacy notice</Link>
+          </p>
+        </div>
       </footer>
     </div>
   )

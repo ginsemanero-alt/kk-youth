@@ -2,13 +2,14 @@ import type { Metadata, Viewport } from 'next'
 import '@fontsource-variable/plus-jakarta-sans'
 import './globals.css'
 import { ToastProvider } from '@/components/Toast'
+import { ORG } from '@/lib/constants'
 
 export const metadata: Metadata = {
-  title: { default: 'KK Youth Profiling System', template: '%s | KK Youth Profiling' },
-  description: 'Youth profiling and management system for the Sangguniang Kabataan.',
+  title: { default: `${ORG.short} | KK Youth Profiling`, template: `%s | ${ORG.short}` },
+  description: `Katipunan ng Kabataan youth profiling and management system of the ${ORG.sk}.`,
 }
 
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#0a1230' }
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#0b1238' }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

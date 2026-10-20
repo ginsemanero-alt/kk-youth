@@ -181,7 +181,7 @@ export default function ReportBuilder({ puroks, role, questions }: { puroks: { i
 
       {role === 'admin' && (
         <label className="flex cursor-pointer items-start gap-3 rounded-[2rem] bg-red-50 p-5 ring-1 ring-red-200">
-          <input type="checkbox" className="mt-1 h-5 w-5 accent-[#dc2626]" checked={withSensitive} onChange={(e) => setWithSensitive(e.target.checked)} />
+          <input type="checkbox" className="mt-1 h-5 w-5 accent-flag" checked={withSensitive} onChange={(e) => setWithSensitive(e.target.checked)} />
           <span className="text-sm font-bold text-red-800">
             <span className="inline-flex items-center gap-1.5 font-black"><ShieldAlert className="h-4 w-4" aria-hidden /> Include religion, disability, medical and sensitive question answers (Admin only)</span>
             <span className="mt-1 block font-semibold">Sensitive personal information. Include it only when the program really needs it. Reading it is recorded in the audit log.</span>

@@ -2,17 +2,28 @@
 
 @theme {
   --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --color-ink: #0a1230;
-  --color-brand: #1d4ed8;
-  --color-brand-deep: #1e3a8a;
-  --color-brand-soft: #dbeafe;
-  --color-sun: #facc15;
-  --color-flag: #dc2626;
-  --color-paper: #f3f5fb;
+  /* Colors from the SK Barangay Bubog logo */
+  --color-ink: #0b1238;
+  --color-brand: #0937b1;
+  --color-brand-deep: #06267d;
+  --color-brand-soft: #dfe7ff;
+  --color-sun: #fad316;
+  --color-flag: #ca0e1c;
+  --color-grape: #5b1a78;
+  --color-paper: #f4f6fc;
 }
 
 html { color-scheme: light; }
-body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+body {
+  background:
+    radial-gradient(60rem 30rem at 100% -10%, color-mix(in srgb, var(--color-sun) 14%, transparent), transparent 70%),
+    radial-gradient(50rem 30rem at -10% 110%, color-mix(in srgb, var(--color-brand) 8%, transparent), transparent 70%),
+    var(--color-paper);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
 
 :focus-visible { outline: 3px solid color-mix(in srgb, var(--color-brand) 55%, white); outline-offset: 2px; }
 

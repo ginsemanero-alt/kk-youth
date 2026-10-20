@@ -2,7 +2,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
-import { ArrowLeft, Loader2, LogIn, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Loader2, LogIn } from 'lucide-react'
+import { BrandMark, Logo, TriStripe } from '@/components/Logo'
+import { ORG } from '@/lib/constants'
 import { createClient } from '@/lib/supabase/client'
 import { friendlyError } from '@/lib/errors'
 import { Alert, Field, btnPrimary, inputCls } from '@/components/ui'
@@ -33,25 +35,25 @@ export default function LoginForm({ next, inactive }: { next?: string; inactive?
 
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
-      <section className="relative hidden flex-col justify-between overflow-hidden bg-ink p-12 text-white lg:flex">
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-linear-to-br from-ink via-ink to-brand-deep p-12 text-white lg:flex">
+        <TriStripe className="absolute inset-x-0 top-0 h-1.5" />
         <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand/60 blur-3xl" aria-hidden />
-        <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-sun/30 blur-3xl" aria-hidden />
-        <Link href="/" className="relative flex items-center gap-3 font-black">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sun text-ink"><ShieldCheck className="h-6 w-6" /></span>
-          KK Youth Profiling System
-        </Link>
+        <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-sun/25 blur-3xl" aria-hidden />
+        <Link href="/" className="relative w-fit" aria-label="Home"><BrandMark tone="light" size={48} /></Link>
         <div className="relative">
-          <h2 className="text-6xl font-black leading-[1.02] tracking-tight">Know your youth.<br />Plan for them.</h2>
-          <p className="mt-6 max-w-md text-lg font-semibold text-white/70">Staff access for SK officers and encoders. Every action is recorded in the audit log.</p>
+          <Logo size={176} preload className="!ring-4 shadow-2xl" />
+          <h2 className="mt-10 text-6xl font-black leading-[1.02] tracking-tight">Know your youth.<br />Plan for them.</h2>
+          <p className="mt-6 max-w-md text-lg font-semibold text-white/70">Staff access for the officers and encoders of the {ORG.sk}. Every action is recorded in the audit log.</p>
         </div>
         <p className="relative text-sm font-semibold text-white/50">Data Privacy Act of 2012 (RA 10173) aware by design.</p>
       </section>
 
       <section className="flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md rounded-[3.5rem] bg-white p-8 shadow-sm ring-1 ring-black/5 sm:p-10">
           <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-black text-slate-500 hover:text-ink">
             <ArrowLeft className="h-4 w-4" /> Back to home
           </Link>
+          <div className="mb-6 lg:hidden"><BrandMark tone="dark" size={56} preload /></div>
           <h1 className="text-5xl font-black tracking-tight">Sign in</h1>
           <p className="mt-2 font-semibold text-slate-500">For SK staff only. Youth can register without an account.</p>
 

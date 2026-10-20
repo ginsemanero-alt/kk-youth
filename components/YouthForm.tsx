@@ -124,14 +124,14 @@ export default function YouthForm({ mode, puroks, settings, questions, youthId, 
           </div>
           {sensitiveShown && <p className="mt-4 rounded-[1.5rem] bg-flag/20 p-4 text-sm font-semibold text-white/90 ring-1 ring-flag/40">{CONSENT_SPI_TEXT}</p>}
           <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-[1.5rem] bg-white/10 p-4">
-            <input type="checkbox" className="mt-1 h-5 w-5 accent-[#facc15]" checked={consentOn} onChange={(e) => setConsentOn(e.target.checked)} />
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-sun" checked={consentOn} onChange={(e) => setConsentOn(e.target.checked)} />
             <span className="text-sm font-black">
               The youth has signed the data privacy consent form (version {newVersion}) and it is on file with the SK.
             </span>
           </label>
           {isMinor && (
             <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-[1.5rem] bg-amber-300/20 p-4 ring-1 ring-amber-300/40">
-              <input type="checkbox" className="mt-1 h-5 w-5 accent-[#facc15]" checked={guardianOk} onChange={(e) => setGuardianOk(e.target.checked)} />
+              <input type="checkbox" className="mt-1 h-5 w-5 accent-sun" checked={guardianOk} onChange={(e) => setGuardianOk(e.target.checked)} />
               <span className="text-sm font-black">{GUARDIAN_CONSENT_TEXT} (signed copy is on file)</span>
             </label>
           )}

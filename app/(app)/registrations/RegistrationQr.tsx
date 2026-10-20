@@ -13,7 +13,7 @@ export default function RegistrationQr() {
     const base = (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, '')
     const link = `${base}/register`
     setUrl(link)
-    QRCode.toDataURL(link, { margin: 1, width: 360, color: { dark: '#0a1230', light: '#ffffff' } }).then(setQr).catch(() => setQr(''))
+    QRCode.toDataURL(link, { margin: 1, width: 360, color: { dark: '#0b1238', light: '#ffffff' } }).then(setQr).catch(() => setQr(''))
   }, [])
 
   const copy = async () => {

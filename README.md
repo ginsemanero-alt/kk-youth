@@ -91,6 +91,10 @@ Active questions appear on the self-registration form, the encoder form, the pro
 
 Answers are stored in `custom_answers` (jsonb) on `youth` and `pending_registrations` and checked by the database: the answer type must match, a choice must be one of the options, text is at most 300 characters, required questions must be answered, and unknown questions are rejected. A **sensitive** question follows the same rules as religion, disability and medical: only Admin and Encoder can read its answers (through the `youth_custom_answers` view), only an Admin can export them, the audit log never contains them, and they need the `-SPI` consent version.
 
+## Logo and branding
+
+The SK Barangay Bubog logo is `assets/sk-logo.jpg` (source) and `assets/sk-logo-round.png` (round version used in the app). It appears in the sidebar, the mobile header, the home, login, registration and privacy pages, and the PDF report header; `app/icon.png` and `app/apple-icon.png` are the browser and phone icons. The colors in `app/globals.css` (blue, yellow, red) come from the logo. The barangay and SK names are in `ORG` in `lib/constants.ts`.
+
 ## Documentation
 
 `docs/01-chapter1-foundation.md` problem statement, objectives, scope and limitations. `docs/02-database-erd.md` schema and ERD. `docs/03-security-rls.md` roles, RLS, encryption, audit. `docs/04-architecture.md` architecture, flows, folders.

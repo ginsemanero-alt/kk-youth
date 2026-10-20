@@ -1,5 +1,23 @@
+import logo from '@/assets/sk-logo.jpg'
+import { ORG } from './constants'
+
 // SheetJS and jsPDF are heavy, so they are loaded on demand (dynamic import) and kept out of the main bundle.
 const loadXlsx = () => import('xlsx')
+
+/** The logo as a data URL for the PDF header; null if it cannot be loaded (the PDF is still made). */
+async function logoDataUrl(): Promise<string | null> {
+  try {
+    const blob = await (await fetch(logo.src)).blob()
+    return await new Promise((resolve) => {
+      const r = new FileReader()
+      r.onload = () => resolve(typeof r.result === 'string' ? r.result : null)
+      r.onerror = () => resolve(null)
+      r.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
 
 export type Row = Record<string, string | number | null>
 export interface Column { header: string; key: string }
@@ -17,27 +35,36 @@ export async function exportXlsx(rows: Row[], filename: string, sheet = 'Data') 
 }
 
 export async function exportPdf(title: string, subtitle: string, columns: Column[], rows: Row[], filename: string) {
-  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+  const [{ jsPDF }, { default: autoTable }, img] = await Promise.all([import('jspdf'), import('jspdf-autotable'), logoDataUrl()])
   const doc = new jsPDF({ orientation: columns.length > 7 ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' })
+  const x = img ? 92 : 40
+  if (img) doc.addImage(img, 'JPEG', 40, 26, 44, 44)
   doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(9, 55, 177)
+  doc.text(ORG.sk.toUpperCase(), x, 36)
   doc.setFontSize(16)
-  doc.text(title, 40, 44)
+  doc.setTextColor(11, 18, 56)
+  doc.text(title, x, 54)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(90)
-  doc.text(subtitle, 40, 60)
+  doc.text(subtitle, x, 68)
+  // Blue, yellow, red rule from the logo.
+  const w = doc.internal.pageSize.getWidth() - 80
+  ;([[9, 55, 177], [250, 211, 22], [202, 14, 28]] as const).forEach(([r, g, b], i) => { doc.setFillColor(r, g, b); doc.rect(40 + (w / 3) * i, 78, w / 3, 3, 'F') })
   autoTable(doc, {
-    startY: 74,
+    startY: 90,
     head: [columns.map((c) => c.header)],
     body: rows.map((r) => columns.map((c) => String(r[c.key] ?? ''))),
     styles: { fontSize: 8, cellPadding: 4 },
-    headStyles: { fillColor: [10, 18, 48] },
+    headStyles: { fillColor: [11, 18, 56] },
     alternateRowStyles: { fillColor: [243, 245, 251] },
     didDrawPage: () => {
       const h = doc.internal.pageSize.getHeight()
       doc.setFontSize(8)
       doc.setTextColor(120)
-      doc.text('Confidential. Contains personal data protected by RA 10173.', 40, h - 20)
+      doc.text(`${ORG.short}. Confidential. Contains personal data protected by RA 10173.`, 40, h - 20)
     },
   })
   doc.save(`${filename}-${stamp()}.pdf`)
