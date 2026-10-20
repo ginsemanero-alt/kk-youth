@@ -1,7 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useActionState, useState } from 'react'
-import { Archive, ArchiveRestore, Check, KeyRound, Loader2, Pencil, Power, PowerOff, Search, Trash2, UserPlus, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Check, Eye, KeyRound, Loader2, Pencil, Power, PowerOff, Search, Trash2, UserPlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { friendlyError } from '@/lib/errors'
 import { useToast } from '@/components/Toast'
@@ -11,13 +11,16 @@ import { formatDate } from '@/lib/format'
 import type { Profile, Role } from '@/lib/types'
 import { Alert, Badge, Card, EmptyState, Field, RoleBadge, SectionTitle, btnDanger, btnDark, btnGhost, btnPrimary, chipCls, inputCls } from '@/components/ui'
 import { createStaffUser, deleteStaffUser, resetStaffPassword, type CreateUserResult } from './actions'
+import UserDetails from './UserDetails'
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?'
 const ROLE_TONE: Record<Role, string> = { admin: 'from-ink to-brand-deep', encoder: 'from-brand to-sky-500', viewer: 'from-slate-400 to-slate-500' }
 
-export default function UserManager({ users, emails, meId, serviceKeySet }: {
+export default function UserManager({ users, emails, lastSignIn, meId, serviceKeySet }: {
   users: Profile[]
   emails: Record<string, string>
+  /** Last sign-in time per user id (from Supabase Auth, read on the server). */
+  lastSignIn: Record<string, string>
   meId: string
   serviceKeySet: boolean
 }) {
@@ -33,6 +36,7 @@ export default function UserManager({ users, emails, meId, serviceKeySet }: {
   const [newPassword, setNewPassword] = useState('')
   const [deleteFor, setDeleteFor] = useState<Profile | null>(null)
   const [confirmName, setConfirmName] = useState('')
+  const [detailsId, setDetailsId] = useState<string | null>(null)
   const [state, action, pending] = useActionState<CreateUserResult | null, FormData>(createStaffUser, null)
 
   const fail = (m: string) => { setError(m); toast.error(m) }
@@ -119,7 +123,10 @@ export default function UserManager({ users, emails, meId, serviceKeySet }: {
             const me = u.id === meId
             const busy = busyId === u.id
             return (
-              <div key={u.id} className={`group min-w-0 rounded-[2.5rem] bg-white p-6 shadow-[0_1px_2px_rgb(11_18_56/0.04),0_12px_32px_-12px_rgb(11_18_56/0.12)] ring-1 ring-black/5 transition duration-300 hover:shadow-[0_24px_48px_-16px_rgb(11_18_56/0.2)] sm:p-7 ${u.is_active ? '' : 'bg-slate-50'}`}>
+              <div
+                key={u.id}
+                onClick={(e) => { if (!(e.target as HTMLElement).closest('button, select, input, a')) setDetailsId(u.id) }}
+                className={`group min-w-0 cursor-pointer rounded-[2.5rem] bg-white p-6 shadow-[0_1px_2px_rgb(11_18_56/0.04),0_12px_32px_-12px_rgb(11_18_56/0.12)] ring-1 ring-black/5 transition duration-300 hover:shadow-[0_24px_48px_-16px_rgb(11_18_56/0.2)] sm:p-7 ${u.is_active ? '' : 'bg-slate-50'}`}>
                 <div className="flex items-start gap-4">
                   <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-linear-to-br text-sm font-black text-white shadow-md ${ROLE_TONE[u.role]} ${u.is_active ? '' : 'grayscale'}`}>{initials(u.full_name || emails[u.id] || '?')}</span>
                   <div className="min-w-0 flex-1">
@@ -152,6 +159,7 @@ export default function UserManager({ users, emails, meId, serviceKeySet }: {
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-5">
+                  <button onClick={() => setDetailsId(u.id)} className={`${btnGhost} !px-4 !py-2.5`}><Eye className="h-4 w-4" /> Details</button>
                   {u.archived_at ? (
                     <>
                       <button disabled={busy} onClick={() => update(u, { archived_at: null }, `${u.full_name} restored and active again.`)} className={btnDark}>
@@ -187,6 +195,27 @@ export default function UserManager({ users, emails, meId, serviceKeySet }: {
           })}
         </div>
       )}
+
+      {detailsId && (() => {
+        const u = users.find((x) => x.id === detailsId)
+        if (!u) return null
+        const close = () => setDetailsId(null)
+        return (
+          <UserDetails
+            user={u}
+            email={emails[u.id]}
+            lastSignIn={lastSignIn[u.id]}
+            isMe={u.id === meId}
+            serviceKeySet={serviceKeySet}
+            onClose={close}
+            onRename={() => { close(); setTab('active'); setEditId(u.id); setEditName(u.full_name) }}
+            onReset={() => { close(); setResetFor(u); setNewPassword('') }}
+            onArchive={() => { close(); void update(u, { archived_at: new Date().toISOString() }, `${u.full_name} archived.`) }}
+            onRestore={() => { close(); void update(u, { archived_at: null }, `${u.full_name} restored and active again.`) }}
+            onDelete={() => { close(); setDeleteFor(u); setConfirmName('') }}
+          />
+        )
+      })()}
 
       {resetFor && (
         <Modal title={`Reset password: ${resetFor.full_name}`} onClose={() => setResetFor(null)}>
