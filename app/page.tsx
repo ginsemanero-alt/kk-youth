@@ -210,7 +210,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-10 text-center sm:flex-row sm:justify-between sm:px-8 sm:text-left">
           <BrandMark tone="light" size={44} />
           <p className="text-sm font-semibold text-white/60">
-            {ORG.sk}. Academic capstone project (BSIT). <Link href="/privacy" className="font-black text-white underline">Privacy notice</Link>
+            {ORG.sk}. <Link href="/privacy" className="font-black text-white underline">Privacy notice</Link>
           </p>
         </div>
       </footer>

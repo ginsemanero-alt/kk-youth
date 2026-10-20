@@ -1,6 +1,6 @@
 # KK Youth Profiling System
 
-Web-based youth profiling and management for a barangay Sangguniang Kabataan (ages 15 to 30). Capstone project (BSIT).
+Web-based youth profiling and management for a barangay Sangguniang Kabataan (ages 15 to 30).
 
 Stack: Next.js 16 (App Router), React 19, Tailwind CSS v4, Supabase (Auth, Postgres with Row Level Security, Storage, Vault), Recharts, SheetJS, jsPDF.
 
