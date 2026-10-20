@@ -119,11 +119,12 @@ create trigger purok_delete_guard before update on public.puroks
 
 -- ---------- Audit trail (filled by triggers, append-only) ------------
 -- Sensitive personal information (religion, disability, medical; columns
--- added by 04_form_fields_extra.sql) is never written to the log: the log
+-- added by 04_form_fields_extra.sql) and answers to sensitive custom
+-- questions (06_custom_questions.sql) are never written to the log: the log
 -- only says that such a field was set or changed.
 create or replace function public.audit_mask(p_data jsonb, p_marker text)
-returns jsonb language plpgsql immutable as $$
-declare k text;
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare k text; v_answers jsonb;
 begin
   if p_data is null then return null; end if;
   foreach k in array array['religion', 'has_disability', 'disability_details', 'has_medical_condition', 'medical_details'] loop
@@ -131,6 +132,14 @@ begin
       p_data := jsonb_set(p_data, array[k], to_jsonb(p_marker));
     end if;
   end loop;
+  if jsonb_typeof(p_data -> 'custom_answers') = 'object' then
+    -- An answer is kept only when its question is known and not sensitive.
+    select coalesce(jsonb_object_agg(e.key, case when q.is_sensitive is false then e.value else to_jsonb(p_marker) end), '{}')
+      into v_answers
+      from jsonb_each(p_data -> 'custom_answers') e
+      left join public.custom_questions q on q.id::text = e.key;
+    p_data := jsonb_set(p_data, '{custom_answers}', v_answers);
+  end if;
   return p_data;
 end $$;
 

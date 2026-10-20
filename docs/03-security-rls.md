@@ -13,6 +13,8 @@ Roles live in `public.profiles.role`. `get_user_role()` (SECURITY DEFINER) retur
 | youth | none | read active (no sensitive columns) | read, add, edit | read incl. deleted, add, edit, soft delete and restore |
 | youth_sensitive (view) | none | no rows | read active | read incl. deleted |
 | form_fields | read | read | read | read; update show/required only |
+| custom_questions | read active | read all | read all | read all, add, edit, deactivate (no delete) |
+| youth_custom_answers (view) | none | non-sensitive answers | all answers | all answers |
 | youth_contacts | none | none | via RPC only | via RPC only |
 | activities | none | read | read, add, edit | same as encoder |
 | attendance | none | read | read, add, remove | same |
@@ -38,6 +40,10 @@ Changed existing logic, and why: `youth` SELECT went from table-level to column-
 
 `form_fields`: anon and authenticated may SELECT (the public form needs it). Only an Admin may UPDATE, and only the `is_visible` and `is_required` columns (column grant). Insert and delete have explicit deny policies and no grants. Every change is audited with `audit_row()`. The settings are enforced by `apply_form_settings()` on `youth` and `pending_registrations`, so a client that skips the form cannot store a hidden field or skip a required one.
 
+## Custom questions
+
+`custom_questions`: anon reads active questions; staff read all (to label old answers). Only an Admin may insert or update, and only through column grants that leave out `question_type` and `is_sensitive` on update. Delete has an explicit deny policy, no grant, and a trigger that blocks it even for the database owner. Changes are audited. `custom_answers` on `youth` is not granted to any API role (`private.grant_youth_select()`); answers are read through `youth_custom_answers`, which gives sensitive answers only to Admin and Encoder. `get_sensitive_answers_bulk()` (Admin only, logged) is used for exports. `audit_mask()` replaces the answers to sensitive questions in the audit log with a marker.
+
 ## Encryption
 
 Mobile numbers are encrypted with `pgp_sym_encrypt` (pgcrypto). The key is created once and stored in Supabase Vault (`kk_contact_key`); only SECURITY DEFINER functions in the `private` schema can read it, and that schema is not exposed by the API. Numbers sit in a separate table, `youth_contacts`, with no direct grants. The only ways in are `set_youth_contact()` and `get_youth_contact()`, restricted to Admin and Encoder, and every reveal is audited. Self-registrations are encrypted by a trigger at insert time, so plaintext is never stored. Exports exclude contact numbers (data minimization).
@@ -62,4 +68,4 @@ Soft-deleted youth are kept 365 days, then an Admin runs `purge_soft_deleted()` 
 
 ## Tests
 
-`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 121 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged). It applies 01 to 05 twice in order to prove they can be re-run. Run: `npm run test:db`.
+`supabase/tests/rls.test.mjs` applies the SQL to a local Postgres (PGlite) and checks 161 behaviors: role isolation, duplicate blocking, age and guardian rules, encryption, audit completeness and immutability, registration approval, import results, soft delete and storage policies, plus form settings (Admin-only changes, required and hidden fields, conditional clean-up, sensitive fields hidden from Viewers in tables, views and exports, no sensitive values in the audit log, settings changes leaving saved records unchanged), and custom questions (Admin-only management, no delete, wrong answers rejected, sensitive answers hidden from Viewers and the audit log, deactivated questions keeping their answers). It applies 01 to 06 twice in order to prove they can be re-run. Run: `npm run test:db`.

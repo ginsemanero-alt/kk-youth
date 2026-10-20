@@ -9,6 +9,7 @@ const s2 = fs.readFileSync(dir + '02_security.sql', 'utf8')
 const s3 = fs.readFileSync(dir + '03_seed.sql', 'utf8')
 const s4 = fs.readFileSync(dir + '04_form_fields_extra.sql', 'utf8')
 const s5 = fs.readFileSync(dir + '05_form_settings.sql', 'utf8')
+const s6 = fs.readFileSync(dir + '06_custom_questions.sql', 'utf8')
 
 const db = new PGlite({ extensions: { pgcrypto } })
 const stubs = `
@@ -48,8 +49,9 @@ try {
   await db.exec(s2); console.log('02 applied')
   await db.exec(s3); await db.exec(s4); console.log('04 applied')
   await db.exec(s5); console.log('05 applied')
-  for (const f of [s1, s2, s3, s4, s5]) await db.exec(f)
-  console.log('re-applied 01 to 05 in order (idempotent)')
+  await db.exec(s6); console.log('06 applied')
+  for (const f of [s1, s2, s3, s4, s5, s6]) await db.exec(f)
+  console.log('re-applied 01 to 06 in order (idempotent)')
   ok('seed puroks, idempotent', (await q('select count(*)::int c from puroks'))[0].c === 4)
 
   const id = { admin: '00000000-0000-0000-0000-0000000000a1', enc: '00000000-0000-0000-0000-0000000000e1', view: '00000000-0000-0000-0000-0000000000f1', enc2: '00000000-0000-0000-0000-0000000000e2' }
@@ -238,7 +240,8 @@ try {
   const ins = (cols) => {
     const base = { first_name: 'Form', last_name: 'Test', birthdate: '2001-02-02', sex: 'male', purok_id: purok, education_status: 'in_school', consent_version: 'KK-CONSENT-v1.1', ...cols }
     const keys = Object.keys(base)
-    const val = (v) => v === null ? 'null' : typeof v === 'boolean' ? String(v) : Array.isArray(v) ? `ARRAY[${v.map((x) => `'${x}'`).join(',')}]::text[]` : `'${String(v).replace(/'/g, "''")}'`
+    const val = (v) => v === null ? 'null' : typeof v === 'boolean' ? String(v) : Array.isArray(v) ? `ARRAY[${v.map((x) => `'${x}'`).join(',')}]::text[]`
+      : typeof v === 'object' ? `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb` : `'${String(v).replace(/'/g, "''")}'`
     return { youth: `insert into youth (${keys.join(', ')}, consent_at) values (${keys.map((k) => val(base[k])).join(', ')}, now()) returning id`,
              pending: `insert into pending_registrations (${keys.join(', ')}) values (${keys.map((k) => val(base[k])).join(', ')})` }
   }
@@ -362,6 +365,106 @@ try {
   await setField(id.admin, 'registered_voter', true, true)
   ok('approval is not blocked by settings changed after submission', !!(await asUser(id.enc, `select approve_registration('${pend.id}') as id`)).rows[0].id)
   await setField(id.admin, 'registered_voter', true, false)
+
+  // ===== Phase B: custom questions =====
+  const qSql = (o) => `insert into custom_questions (label, question_type, options, is_required, is_sensitive, sort_order)
+    values ('${o.label}', '${o.type}', ${o.options ? `ARRAY[${o.options.map((x) => `'${x}'`).join(',')}]::text[]` : "'{}'"}, ${o.required ?? false}, ${o.sensitive ?? false}, ${o.sort ?? 0}) returning id, options`
+  e = await err(id.enc, qSql({ label: 'Shirt size', type: 'single_choice', options: ['S', 'M'] }))
+  ok('encoder cannot create a question', e && /row-level security/.test(e), e)
+  e = await err(id.view, qSql({ label: 'Shirt size', type: 'single_choice', options: ['S', 'M'] }))
+  ok('viewer cannot create a question', e && /row-level security/.test(e), e)
+  e = await anonErr(qSql({ label: 'Shirt size', type: 'single_choice', options: ['S', 'M'] }))
+  ok('anon cannot create a question', e && /permission denied/.test(e), e)
+  e = await err(id.admin, qSql({ label: 'One option', type: 'single_choice', options: ['Only'] }))
+  ok('choice question needs at least 2 options', e && e.includes('2 to 20'), e)
+  const qShirt = (await asUser(id.admin, qSql({ label: 'Shirt size', type: 'single_choice', options: ['S', 'M', ' M ', 'L'], sort: 1 }))).rows[0]
+  ok('admin creates a question, options cleaned', JSON.stringify(qShirt.options) === JSON.stringify(['S', 'M', 'L']), JSON.stringify(qShirt.options))
+  const qVol = (await asUser(id.admin, qSql({ label: 'Willing to volunteer', type: 'yes_no', required: true, sort: 2 }))).rows[0]
+  const qSports = (await asUser(id.admin, qSql({ label: 'Sports', type: 'multi_choice', options: ['Basketball', 'Volleyball', 'Chess'], sort: 3 }))).rows[0]
+  const qNote = (await asUser(id.admin, qSql({ label: 'Message to the SK', type: 'text', sort: 4 }))).rows[0]
+  const qSecret = (await asUser(id.admin, qSql({ label: 'Family income bracket', type: 'text', sensitive: true, sort: 5 }))).rows[0]
+  ok('viewer cannot edit a question (0 rows)', (await asUser(id.view, `update custom_questions set label='x' where id='${qShirt.id}' returning id`)).rows.length === 0)
+  e = await err(id.admin, `update custom_questions set question_type='text' where id='${qShirt.id}'`)
+  ok('question type cannot be changed', e && /permission denied/.test(e), e)
+  e = await err(id.admin, `update custom_questions set is_sensitive=true where id='${qShirt.id}'`)
+  ok('sensitive flag cannot be changed', e && /permission denied/.test(e), e)
+  e = await err(id.admin, `delete from custom_questions where id='${qShirt.id}'`)
+  ok('questions cannot be deleted from the client', e && /permission denied/.test(e), e)
+  try { await db.exec(`delete from custom_questions where id='${qShirt.id}'`); ok('questions cannot be hard deleted (even superuser)', false) } catch (x) { ok('questions cannot be hard deleted (even superuser)', String(x.message).includes('Deactivate')) }
+  ok('questions are audited', (await q(`select count(*)::int c from audit_logs where table_name='custom_questions' and action='insert'`))[0].c === 5)
+
+  const ans = (o) => ({ [qVol.id]: true, ...o })
+  const yIns = (first, answers, extra = {}) => ins({ first_name: first, custom_answers: answers, ...extra }).youth
+
+  // (g) wrong answers are rejected by the database
+  e = await err(id.enc, yIns('Q1', ans({ [qShirt.id]: 'XXL' })))
+  ok('choice answer outside the options is rejected', e && e.includes('one of the listed options'), e)
+  e = await err(id.enc, yIns('Q2', ans({ [qVol.id]: 'yes' })))
+  ok('yes/no answer must be a boolean', e && e.includes('must be yes or no'), e)
+  e = await err(id.enc, yIns('Q3', ans({ [qNote.id]: 'x'.repeat(301) })))
+  ok('text answer longer than 300 is rejected', e && e.includes('300'), e)
+  e = await err(id.enc, yIns('Q4', ans({ [qSports.id]: ['Basketball', 'Swimming'] })))
+  ok('multi-choice answer outside the options is rejected', e && e.includes('only the listed options'), e)
+  e = await err(id.enc, yIns('Q5', ans({ [qSports.id]: 'Basketball' })))
+  ok('multi-choice answer must be a list', e && e.includes('list of options'), e)
+  e = await err(id.enc, yIns('Q6', ans({ '00000000-0000-0000-0000-000000000999': 'x' })))
+  ok('answer to an unknown question is rejected', e && e.includes('Unknown question'), e)
+  e = await err(id.enc, yIns('Q7', {}))
+  ok('missing required question is rejected', e && e.includes('Required question: Willing to volunteer'), e)
+  e = await anonErr(ins({ first_name: 'QAnon', custom_answers: { [qShirt.id]: 'XXL' } }).pending)
+  ok('registration with a wrong answer is rejected', e && e.includes('Required question') || e && e.includes('listed options'), e)
+  r = await asUser(id.enc, yIns('QGood', ans({ [qShirt.id]: 'M', [qSports.id]: ['Chess', 'Chess', 'Basketball'], [qNote.id]: '  hello   SK ' })))
+  const qGood = r.rows[0].id
+  const stored = (await q(`select custom_answers a from youth where id='${qGood}'`))[0].a
+  ok('valid answers stored and cleaned', stored[qShirt.id] === 'M' && stored[qSports.id].length === 2 && stored[qNote.id] === 'hello SK' && stored[qVol.id] === true, JSON.stringify(stored))
+
+  // approval and import carry the answers
+  await anon(ins({ first_name: 'QReg', custom_answers: { [qVol.id]: false, [qShirt.id]: 'L' } }).pending)
+  const qReg = (await q(`select id from pending_registrations where first_name='QReg'`))[0]
+  const qRegYouth = (await asUser(id.enc, `select approve_registration('${qReg.id}') as id`)).rows[0].id
+  ok('approval copies custom answers', (await q(`select custom_answers->>'${qShirt.id}' s from youth where id='${qRegYouth}'`))[0].s === 'L')
+  const impQ = (await asUser(id.enc, `select import_youth('${JSON.stringify([
+    { first_name: 'ImpQ', last_name: 'Ok', birthdate: '2000-01-01', sex: 'male', purok: 'Purok 1', education_status: 'graduated', custom_answers: { [qVol.id]: true, [qShirt.id]: 'S' } },
+    { first_name: 'ImpQ', last_name: 'Bad', birthdate: '2000-01-01', sex: 'male', purok: 'Purok 1', education_status: 'graduated', custom_answers: { [qVol.id]: true, [qShirt.id]: 'XXL' } },
+    { first_name: 'ImpQ', last_name: 'Missing', birthdate: '2000-01-01', sex: 'male', purok: 'Purok 1', education_status: 'graduated' },
+  ])}'::jsonb) as r`)).rows[0].r
+  ok('import validates custom answers per row', impQ.imported === 1 && impQ.results[1].error.includes('listed options') && impQ.results[2].error.includes('Required question'), JSON.stringify(impQ))
+
+  // sensitive answers: same rules as Phase 0
+  e = await err(id.enc, yIns('QNoSpi', ans({ [qSecret.id]: 'Below 10k SecretAns' })))
+  ok('sensitive answer needs the -SPI consent', e && e.includes('-SPI'), e)
+  r = await asUser(id.enc, yIns('QSpi', ans({ [qSecret.id]: 'Below 10k SecretAns', [qShirt.id]: 'S' }), { consent_version: 'KK-CONSENT-v1.1-SPI' }))
+  const qSpi = r.rows[0].id
+  e = await err(id.view, `select custom_answers from youth where id='${qSpi}'`)
+  ok('viewer cannot read custom_answers from youth', e && /permission denied/.test(e), e)
+  e = await err(id.enc, `select custom_answers from youth where id='${qSpi}'`)
+  ok('no API role reads custom_answers from youth directly', e && /permission denied/.test(e), e)
+  const vView = (await asUser(id.view, `select * from youth_custom_answers where id='${qSpi}'`)).rows[0]
+  ok('viewer sees non-sensitive answers only', vView && vView.answers[qShirt.id] === 'S' && !(qSecret.id in vView.answers) && vView.sensitive_answers === null, JSON.stringify(vView))
+  ok('viewer sees no sensitive answer anywhere', !JSON.stringify((await asUser(id.view, `select * from youth_custom_answers`)).rows).includes('SecretAns'))
+  const vEnc = (await asUser(id.enc, `select * from youth_custom_answers where id='${qSpi}'`)).rows[0]
+  ok('encoder sees sensitive answers', vEnc.sensitive_answers?.[qSecret.id] === 'Below 10k SecretAns', JSON.stringify(vEnc))
+  e = await err(id.view, `select * from get_sensitive_answers_bulk(ARRAY['${qSpi}']::uuid[])`)
+  ok('viewer cannot export sensitive answers', e && e.includes('Not allowed'), e)
+  e = await err(id.enc, `select * from get_sensitive_answers_bulk(ARRAY['${qSpi}']::uuid[])`)
+  ok('encoder cannot export sensitive answers', e && e.includes('Not allowed'), e)
+  ok('admin can export sensitive answers', JSON.stringify((await asUser(id.admin, `select * from get_sensitive_answers_bulk(ARRAY['${qSpi}']::uuid[])`)).rows).includes('SecretAns'))
+  e = await anonErr(`select * from youth_custom_answers`)
+  ok('anon cannot read answers', e && /permission denied/.test(e), e)
+  await asUser(id.enc, `update youth set custom_answers = '${JSON.stringify(ans({ [qSecret.id]: 'Above 50k SecretAns', [qShirt.id]: 'S' }))}'::jsonb where id='${qSpi}'`)
+  ok('sensitive answer updated', (await asUser(id.enc, `select sensitive_answers->>'${qSecret.id}' s from youth_custom_answers where id='${qSpi}'`)).rows[0].s === 'Above 50k SecretAns')
+  ok('audit log has no sensitive answers', (await q(`select count(*)::int c from audit_logs where coalesce(old_data::text,'') || coalesce(new_data::text,'') || coalesce(detail::text,'') like '%SecretAns%'`))[0].c === 0)
+  ok('audit log keeps non-sensitive answers', (await q(`select count(*)::int c from audit_logs where table_name='youth' and record_id='${qGood}' and new_data->'custom_answers'->>'${qShirt.id}' = 'M'`))[0].c === 1)
+
+  // deactivating keeps old answers
+  await asUser(id.admin, `update custom_questions set is_active=false where id in ('${qShirt.id}', '${qVol.id}')`)
+  ok('anon no longer sees a deactivated question', !(await anon(`select id from custom_questions`)).rows.some((x) => x.id === qShirt.id))
+  ok('staff still see deactivated questions (labels for old answers)', (await asUser(id.view, `select id from custom_questions where id='${qShirt.id}'`)).rows.length === 1)
+  ok('deactivating keeps saved answers', (await q(`select custom_answers->>'${qShirt.id}' s from youth where id='${qGood}'`))[0].s === 'M')
+  await asUser(id.enc, `update youth set custom_answers = '{}'::jsonb, civil_status='single' where id='${qGood}'`)
+  ok('editing keeps answers to deactivated questions', (await q(`select custom_answers->>'${qShirt.id}' s from youth where id='${qGood}'`))[0].s === 'M')
+  r = await asUser(id.enc, yIns('QAfter', { [qShirt.id]: 'XXL' }))
+  ok('deactivated question is not required and its answer is dropped', (await q(`select custom_answers a from youth where id='${r.rows[0].id}'`))[0].a[qShirt.id] === undefined)
 
   // inactive user loses all access
   await db.exec(`update profiles set is_active=false where id='${id.enc2}'`)

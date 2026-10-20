@@ -18,8 +18,9 @@ Youth registry with duplicate detection, purok management, dashboard analytics (
    3. `supabase/03_seed.sql` (optional sample puroks)
    4. `supabase/04_form_fields_extra.sql` (fields from the paper Youth Profile Form)
    5. `supabase/05_form_settings.sql` (Admin form settings)
+   6. `supabase/06_custom_questions.sql` (Admin's own questions)
 
-   All files can be re-run safely. If you re-run 01 or 02, run every later file again in order afterwards (02 resets grants and functions that 04 and 05 extend).
+   All files can be re-run safely. If you re-run any file, run every later file again in order afterwards (for example, 02 resets grants and 04 and 06 redefine the approval and import functions).
 4. **Environment**: copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Project Settings > API)
    - `SUPABASE_SERVICE_ROLE_KEY` (same page). Server only. Never prefix it with `NEXT_PUBLIC_`, never commit it.
@@ -45,8 +46,8 @@ Push to GitHub, import the repo in Vercel, add the four environment variables, d
 - **Windows**: `npm run test:db` works on Windows and Linux. On a low-memory PC, test with `npm run build` then `npm start` instead of `npm run dev`.
 - **Rate limiting**: before a public launch, put a CAPTCHA (Cloudflare Turnstile or Supabase CAPTCHA) in front of the self-registration form.
 - **Imports** are marked with consent source "import". The importing user confirms that signed consent forms are on file; under-18 rows need a guardian name.
-- Exports never include contact numbers or email addresses. Religion, disability and medical information are exported only when an Admin ticks "Include sensitive information" on the Reports page (the read is logged).
-- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (121 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
+- Exports never include contact numbers or email addresses. Religion, disability, medical and sensitive question answers are exported only when an Admin ticks "Include sensitive information" on the Reports page (the read is logged).
+- The UI was checked in a browser against a stand-in backend, and the database rules were tested locally (161 checks in `supabase/tests`). It has not been run against your own Supabase project, so test each role once after setup.
 
 ## Form settings (Admin)
 
@@ -79,6 +80,14 @@ Conditional fields appear only when they apply, and a database trigger clears th
 **Sensitive information** (religion, disability, medical) is hidden and optional by default, readable only by Admin and Encoder (enforced with column grants and the `youth_sensitive` view, so Viewers cannot read it from any table, view or export), exported only by an Admin, and never written to the audit log (the log only says the field changed). When any sensitive field is shown, the consent text gains a paragraph about it and the version becomes `KK-CONSENT-v1.1-SPI`; the database refuses sensitive values without that version. Older records keep the consent version they were saved with.
 
 **Consent text** (`lib/constants.ts`) follows the paper form: consent to collect, process, use and keep the information for KK profiling under RA 10742 and RA 10173, and that it will not be used as evidence in any legal proceeding. It is written in our own words. **Have the barangay legal officer or Data Protection Officer review it before use.**
+
+## Custom questions (Admin)
+
+Also on `/admin/form-settings`: the Admin can add their own questions (short text up to 300 characters, choose one, choose any, yes or no), edit the wording, help text, options and Required, reorder them, and deactivate them. Questions are never deleted; a deactivated question is no longer asked, but answers already given are kept and still shown (marked "No longer asked"). The type and the sensitive setting are fixed once a question exists.
+
+Active questions appear on the self-registration form, the encoder form, the profile page ("Karagdagang impormasyon"), the registrations inbox, the report (with a count per answer for choose-one and yes/no questions, and a filter by answer), the Excel and PDF exports (`Q: <question>` columns) and the import template.
+
+Answers are stored in `custom_answers` (jsonb) on `youth` and `pending_registrations` and checked by the database: the answer type must match, a choice must be one of the options, text is at most 300 characters, required questions must be answered, and unknown questions are rejected. A **sensitive** question follows the same rules as religion, disability and medical: only Admin and Encoder can read its answers (through the `youth_custom_answers` view), only an Admin can export them, the audit log never contains them, and they need the `-SPI` consent version.
 
 ## Documentation
 

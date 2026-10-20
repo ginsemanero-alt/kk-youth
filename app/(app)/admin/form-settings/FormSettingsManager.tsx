@@ -6,9 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 import ProfileFields from '@/components/ProfileFields'
 import { useToast } from '@/components/Toast'
 import { friendlyError } from '@/lib/errors'
-import { anySensitiveShown, toRules } from '@/lib/formSettings'
+import { sensitiveAsked, toRules } from '@/lib/formSettings'
 import { CONSENT_SPI_TEXT, consentVersionFor } from '@/lib/constants'
-import type { FormFieldSetting } from '@/lib/types'
+import type { CustomQuestion, FormFieldSetting } from '@/lib/types'
+import CustomQuestionsEditor from './CustomQuestionsEditor'
 import { emptyProfile, type ProfileValues } from '@/lib/validation'
 import { Alert, Badge, Card, SectionTitle } from '@/components/ui'
 
@@ -36,16 +37,21 @@ function Toggle({ on, disabled, onClick, label }: { on: boolean; disabled?: bool
   )
 }
 
-export default function FormSettingsManager({ initial, puroks }: { initial: FormFieldSetting[]; puroks: { id: string; name: string }[] }) {
+export default function FormSettingsManager({ initial, initialQuestions, puroks }: {
+  initial: FormFieldSetting[]
+  initialQuestions: CustomQuestion[]
+  puroks: { id: string; name: string }[]
+}) {
   const router = useRouter()
   const toast = useToast()
   const [fields, setFields] = useState(initial)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<ProfileValues>(emptyProfile)
+  const [questions, setQuestions] = useState(initialQuestions)
   const rules = useMemo(() => toRules(fields), [fields])
   const byKey = (k: string | null) => fields.find((f) => f.field_key === k)
-  const sensitiveOn = anySensitiveShown(rules)
+  const sensitiveOn = sensitiveAsked(rules, questions)
 
   const save = async (f: FormFieldSetting, next: { is_visible: boolean; is_required: boolean }) => {
     setError(null)
@@ -73,8 +79,8 @@ export default function FormSettingsManager({ initial, puroks }: { initial: Form
           </p>
           <p className="mt-3 text-xs font-semibold text-red-700">
             {sensitiveOn
-              ? `A sensitive field is shown, so new forms use consent version ${consentVersionFor(true)} with an extra paragraph about sensitive information.`
-              : `No sensitive field is shown. New forms use consent version ${consentVersionFor(false)}.`}
+              ? `A sensitive field or question is shown, so new forms use consent version ${consentVersionFor(true)} with an extra paragraph about sensitive information.`
+              : `No sensitive field or question is shown. New forms use consent version ${consentVersionFor(false)}.`}
           </p>
         </div>
 
@@ -127,6 +133,8 @@ export default function FormSettingsManager({ initial, puroks }: { initial: Form
             </ul>
           </Card>
         ))}
+
+        <CustomQuestionsEditor questions={questions} onChange={setQuestions} />
       </div>
 
       <div className="xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:self-start xl:overflow-y-auto">
@@ -134,7 +142,7 @@ export default function FormSettingsManager({ initial, puroks }: { initial: Form
           <SectionTitle sub="What youth and encoders see with these settings. Nothing typed here is saved.">
             <span className="inline-flex items-center gap-2"><Eye className="h-6 w-6 text-brand" aria-hidden /> Live preview</span>
           </SectionTitle>
-          <ProfileFields values={preview} onChange={setPreview} puroks={puroks} rules={rules} idPrefix="preview" />
+          <ProfileFields values={preview} onChange={setPreview} puroks={puroks} rules={rules} questions={questions} idPrefix="preview" />
           {sensitiveOn && <p className="mt-6 rounded-[2rem] bg-ink p-5 text-sm font-semibold text-white/80">{CONSENT_SPI_TEXT}</p>}
         </Card>
       </div>

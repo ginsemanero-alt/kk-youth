@@ -7,8 +7,9 @@ import { friendlyError } from '@/lib/errors'
 import { useToast } from '@/components/Toast'
 import { ageOn, toList } from '@/lib/format'
 import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, EDU_STATUS_OPTIONS, EMPLOYMENT_OPTIONS, SECTOR_OPTIONS, SEX_OPTIONS } from '@/lib/constants'
-import { anySensitiveShown, fieldApplies, required, shown, toRules, type FormRules } from '@/lib/formSettings'
-import type { FormFieldSetting } from '@/lib/types'
+import { MAX_TEXT_ANSWER } from '@/lib/customQuestions'
+import { fieldApplies, required, sensitiveAsked, shown, toRules, type FormRules } from '@/lib/formSettings'
+import type { CustomAnswers, CustomQuestion, FormFieldSetting } from '@/lib/types'
 import { Alert, Card, SectionTitle, StatCard, btnDark, btnGhost, btnPrimary } from '@/components/ui'
 
 const MAX_ROWS = 2000
@@ -74,14 +75,49 @@ const OPTIONAL: { key: string; kind: Kind; parent?: string; options?: { value: s
   { key: 'civic_involvement', kind: 'list' },
 ]
 
-/** Template columns: the core fields, then every optional field the form settings show. */
-const columnsFor = (rules: FormRules) => [
+/** Column header of a custom question in the template (headers are matched in lower case). */
+const qColumn = (q: CustomQuestion) => `Q: ${q.label}`
+
+/** Template columns: the core fields, every optional field the form settings show, then the active questions. */
+const columnsFor = (rules: FormRules, questions: CustomQuestion[]) => [
   'first_name', 'last_name', 'birthdate', 'sex', 'purok', 'education_status',
   ...OPTIONAL.filter((c) => shown(rules, c.parent ?? c.key)).map((c) => c.key),
   'guardian_name', 'guardian_relationship',
+  ...questions.map(qColumn),
 ]
 
-function parseRow(r: Record<string, unknown>, line: number, puroks: string[], rules: FormRules): Parsed {
+/** Reads the answers to the Admin's questions. Same checks as validate_custom_answers() in the database. */
+function parseAnswers(get: (k: string) => string, questions: CustomQuestion[]): CustomAnswers | string {
+  const out: CustomAnswers = {}
+  const match = (q: CustomQuestion, raw: string) => q.options.find((o) => o.toLowerCase() === raw.trim().toLowerCase())
+  for (const q of questions) {
+    const raw = get(qColumn(q).toLowerCase())
+    if (!raw) {
+      if (q.is_required) return `"${qColumn(q)}" is required`
+      continue
+    }
+    if (q.question_type === 'text') {
+      if (raw.length > MAX_TEXT_ANSWER) return `"${qColumn(q)}" is longer than ${MAX_TEXT_ANSWER} characters`
+      out[q.id] = raw
+    } else if (q.question_type === 'yes_no') {
+      const v = pickYesNo(raw)
+      if (!v) return `"${qColumn(q)}" must be yes or no`
+      out[q.id] = v === 'yes'
+    } else if (q.question_type === 'single_choice') {
+      const v = match(q, raw)
+      if (!v) return `"${qColumn(q)}" must be one of: ${q.options.join(', ')}`
+      out[q.id] = v
+    } else {
+      const parts = toList(raw)
+      const picked = parts.map((p) => match(q, p))
+      if (picked.some((p) => !p)) return `"${qColumn(q)}" may only use: ${q.options.join(', ')}`
+      out[q.id] = [...new Set(picked as string[])]
+    }
+  }
+  return out
+}
+
+function parseRow(r: Record<string, unknown>, line: number, puroks: string[], rules: FormRules, questions: CustomQuestion[]): Parsed {
   const get = (k: string) => String(r[k] ?? '').trim()
   const name = `${get('first_name')} ${get('last_name')}`.trim() || '(no name)'
   const fail = (error: string): Parsed => ({ line, name, payload: null, error })
@@ -141,11 +177,16 @@ function parseRow(r: Record<string, unknown>, line: number, puroks: string[], ru
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('email is not a valid email address')
   if (payload.youth_org_member === 'yes' && !String(payload.youth_org_name ?? '').trim()) return fail('youth_org_name is required when youth_org_member is yes')
   if (age < 18 && !get('guardian_name')) return fail('guardian_name is required for youth below 18')
+  if (questions.length) {
+    const answers = parseAnswers(get, questions)
+    if (typeof answers === 'string') return fail(answers)
+    payload.custom_answers = answers
+  }
 
   return { line, name, error: null, payload }
 }
 
-export default function ImportWizard({ puroks, settings }: { puroks: string[]; settings: FormFieldSetting[] }) {
+export default function ImportWizard({ puroks, settings, questions }: { puroks: string[]; settings: FormFieldSetting[]; questions: CustomQuestion[] }) {
   const rules = useMemo(() => toRules(settings), [settings])
   const input = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState('')
@@ -160,7 +201,7 @@ export default function ImportWizard({ puroks, settings }: { puroks: string[]; s
 
   const valid = rows.filter((r) => r.payload)
   const invalid = rows.filter((r) => !r.payload)
-  const columns = columnsFor(rules)
+  const columns = columnsFor(rules, questions)
   const requiredCols = OPTIONAL.filter((c) => !c.parent && required(rules, c.key)).map((c) => c.key)
 
   const template = () => {
@@ -173,18 +214,28 @@ export default function ImportWizard({ puroks, settings }: { puroks: string[]; s
       skills: 'carpentry, welding', interests: 'basketball', civic_involvement: 'SK activities', guardian_name: '', guardian_relationship: '',
     }
     const example: Row = Object.fromEntries(columns.map((k) => [k, sample[k] ?? '']))
+    for (const q of questions) {
+      example[qColumn(q)] = q.question_type === 'yes_no' ? 'yes' : q.question_type === 'text' ? '' : q.options[0] ?? ''
+    }
     const list = (o: { value: string }[]) => o.map((x) => x.value)
     const lists: [string, string[]][] = [
       ['purok', puroks], ['sex', list(SEX_OPTIONS)], ['education_status', list(EDU_STATUS_OPTIONS)],
       ...OPTIONAL.filter((c) => shown(rules, c.parent ?? c.key) && (c.kind === 'enum' || c.kind === 'yesno'))
         .map((c): [string, string[]] => [c.key, c.kind === 'yesno' ? ['yes', 'no'] : list(c.options ?? [])]),
+      ...questions.filter((q) => q.question_type !== 'text')
+        .map((q): [string, string[]] => [qColumn(q), q.question_type === 'yes_no' ? ['yes', 'no'] : q.options]),
     ]
     const max = Math.max(...lists.map(([, l]) => l.length))
     const allowed: string[][] = [lists.map(([k]) => k)]
     for (let i = 0; i < max; i++) allowed.push(lists.map(([, l]) => l[i] ?? ''))
     const notes: string[][] = [
       ['Column', 'Required?'],
-      ...columns.map((k) => [k, ['first_name', 'last_name', 'birthdate', 'sex', 'purok', 'education_status'].includes(k) || requiredCols.includes(k) ? 'Required' : k === 'guardian_name' ? 'Required below 18' : 'Optional']),
+      ...columns.map((k) => {
+        const q = questions.find((x) => qColumn(x) === k)
+        const req = ['first_name', 'last_name', 'birthdate', 'sex', 'purok', 'education_status'].includes(k) || requiredCols.includes(k) || q?.is_required
+        const note = q?.question_type === 'multi_choice' ? ' (separate choices with commas)' : ''
+        return [k, (req ? 'Required' : k === 'guardian_name' ? 'Required below 18' : 'Optional') + note]
+      }),
     ]
     exportWorkbook([{ name: 'Youth', rows: [example] }, { name: 'Allowed values', rows: allowed }, { name: 'Columns', rows: notes }], 'youth-import-template.xlsx')
   }
@@ -202,7 +253,7 @@ export default function ImportWizard({ puroks, settings }: { puroks: string[]; s
       if (missing.length) return fail(`Missing column(s): ${missing.join(', ')}. Download the template to see the expected headers.`)
       const cleaned = json.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim().toLowerCase(), v])))
       setFileName(file.name)
-      setRows(cleaned.map((r, i) => parseRow(r, i + 2, puroks, rules)))
+      setRows(cleaned.map((r, i) => parseRow(r, i + 2, puroks, rules, questions)))
     } catch {
       setError('This file could not be read. Make sure it is a valid Excel or CSV file.')
     }
@@ -277,7 +328,7 @@ export default function ImportWizard({ puroks, settings }: { puroks: string[]; s
             <input type="checkbox" className="mt-1 h-5 w-5 accent-[#1d4ed8]" checked={attest} onChange={(e) => setAttest(e.target.checked)} />
             <span className="text-sm font-bold">
               I confirm that signed data privacy consent forms are on file for these youth, including parent or guardian consent for those below 18
-              {anySensitiveShown(rules) ? ', and that rows with religion, disability or medical information have the consent version that covers sensitive information' : ''}.
+              {sensitiveAsked(rules, questions) ? ', and that rows with religion, disability, medical or sensitive question answers have the consent version that covers sensitive information' : ''}.
             </span>
           </label>
           <button onClick={run} disabled={busy || !attest || valid.length === 0} className={`${btnDark} mt-5`}>

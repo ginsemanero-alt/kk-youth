@@ -8,12 +8,16 @@ import { Alert, Card, btnPrimary } from '@/components/ui'
 import { GUARDIAN_CONSENT_TEXT, consentTextFor, consentVersionFor } from '@/lib/constants'
 import { ageOn } from '@/lib/format'
 import { friendlyError } from '@/lib/errors'
-import { anySensitiveShown, toRules } from '@/lib/formSettings'
-import type { FormFieldSetting } from '@/lib/types'
+import { sensitiveAsked, toRules } from '@/lib/formSettings'
+import type { CustomQuestion, FormFieldSetting } from '@/lib/types'
 import { useToast } from '@/components/Toast'
 import { cleanPhone, emptyProfile, profilePayload, validateProfile, type ProfileValues } from '@/lib/validation'
 
-export default function RegisterForm({ puroks, settings }: { puroks: { id: string; name: string }[]; settings: FormFieldSetting[] }) {
+export default function RegisterForm({ puroks, settings, questions }: {
+  puroks: { id: string; name: string }[]
+  settings: FormFieldSetting[]
+  questions: CustomQuestion[]
+}) {
   const rules = useMemo(() => toRules(settings), [settings])
   const [v, setV] = useState<ProfileValues>(emptyProfile)
   const [consent, setConsent] = useState(false)
@@ -27,13 +31,13 @@ export default function RegisterForm({ puroks, settings }: { puroks: { id: strin
 
   const age = v.birthdate ? ageOn(v.birthdate) : null
   const isMinor = age !== null && age >= 0 && age < 18
-  const sensitiveShown = anySensitiveShown(rules)
+  const sensitiveShown = sensitiveAsked(rules, questions)
   const version = consentVersionFor(sensitiveShown)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    const problem = validateProfile(v, rules)
+    const problem = validateProfile(v, rules, { questions })
     if (problem) return fail(problem)
     if (!consent) return fail('Please read and accept the data privacy consent to continue.')
     if (isMinor && !guardianConsent) return fail('A parent or guardian must agree to the consent for youth below 18.')
@@ -42,7 +46,7 @@ export default function RegisterForm({ puroks, settings }: { puroks: { id: strin
     setBusy(true)
     const supabase = createClient()
     const { error: err } = await supabase.from('pending_registrations').insert({
-      ...profilePayload(v, rules, { isMinor, includeSensitive: true }),
+      ...profilePayload(v, rules, { isMinor, includeSensitive: true, questions }),
       contact_number: cleanPhone(v.contact_number) || null,
       consent_version: version,
     })
@@ -73,7 +77,7 @@ export default function RegisterForm({ puroks, settings }: { puroks: { id: strin
 
       <form onSubmit={submit} className="mt-8 space-y-6" noValidate>
         {error && <Alert>{error}</Alert>}
-        <ProfileFields values={v} onChange={setV} puroks={puroks} rules={rules} idPrefix="reg" />
+        <ProfileFields values={v} onChange={setV} puroks={puroks} rules={rules} questions={questions} idPrefix="reg" />
 
         {/* Honeypot: hidden from people, visible to bots */}
         <div aria-hidden className="absolute -left-[9999px] h-0 w-0 overflow-hidden">

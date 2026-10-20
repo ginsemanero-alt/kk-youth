@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { friendlyError } from '@/lib/errors'
 import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, SECTOR_OPTIONS, label, yesNo } from '@/lib/constants'
 import { formatDateTime, ageOn } from '@/lib/format'
+import { formatAnswer, loadQuestions } from '@/lib/customQuestions'
 import type { PendingRegistration } from '@/lib/types'
 import { Card, EducationBadge, EmploymentBadge, EmptyState, Pill, PageHeader, RegistrationBadge, SectionTitle, Badge } from '@/components/ui'
 import RegistrationActions from './RegistrationActions'
@@ -17,11 +18,12 @@ export default async function RegistrationsPage() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('pending_registrations')
-    .select('id, first_name, middle_name, last_name, suffix, birthdate, sex, civil_status, civil_status_other, purok_id, education_status, education_level, course, out_of_school_reason, employment_status, employment_sector, employment_duration, government_agency, email, registered_voter, youth_org_member, youth_org_name, religion, has_disability, disability_details, has_medical_condition, medical_details, skills, interests, civic_involvement, consent_version, consent_at, guardian_name, guardian_relationship, status, rejection_reason, created_at, puroks(name)')
+    .select('id, first_name, middle_name, last_name, suffix, birthdate, sex, civil_status, civil_status_other, purok_id, education_status, education_level, course, out_of_school_reason, employment_status, employment_sector, employment_duration, government_agency, email, registered_voter, youth_org_member, youth_org_name, religion, has_disability, disability_details, has_medical_condition, medical_details, custom_answers, skills, interests, civic_involvement, consent_version, consent_at, guardian_name, guardian_relationship, status, rejection_reason, created_at, puroks(name)')
     .order('created_at', { ascending: false })
     .limit(100)
   if (error) throw new Error(friendlyError(error))
   const rows = (data ?? []) as unknown as PendingRegistration[]
+  const questions = await loadQuestions(supabase)
   const pending = rows.filter((r) => r.status === 'pending')
   const done = rows.filter((r) => r.status !== 'pending')
 
@@ -67,6 +69,16 @@ export default async function RegistrationsPage() {
                     {r.has_disability !== null && <p className="mt-1">PWD: {r.has_disability ? r.disability_details || 'Yes' : 'No'}</p>}
                     {r.has_medical_condition !== null && <p className="mt-1">Medical condition: {r.has_medical_condition ? r.medical_details || 'Yes' : 'No'}</p>}
                   </div>
+                )}
+                {questions.some((q) => r.custom_answers?.[q.id] !== undefined) && (
+                  <dl className="mt-3 space-y-1 rounded-[1.5rem] bg-slate-50 p-4 text-sm font-semibold text-slate-600 ring-1 ring-black/5">
+                    {questions.filter((q) => r.custom_answers?.[q.id] !== undefined).map((q) => (
+                      <div key={q.id} className={q.is_sensitive ? 'text-red-800' : ''}>
+                        <dt className="inline font-black">{q.label}{q.is_sensitive ? ' (sensitive)' : ''}: </dt>
+                        <dd className="inline">{formatAnswer(r.custom_answers[q.id])}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 )}
                 {r.guardian_name && <p className="mt-3 text-sm font-bold text-amber-800">Guardian: {r.guardian_name}{r.guardian_relationship ? ` (${r.guardian_relationship})` : ''}</p>}
                 <div className="mt-3 flex flex-wrap gap-1.5">{[...r.skills, ...r.interests].slice(0, 8).map((t) => <Pill key={t}>{t}</Pill>)}</div>

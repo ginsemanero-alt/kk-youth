@@ -129,6 +129,7 @@ export interface PendingRegistration {
   disability_details: string | null
   has_medical_condition: boolean | null
   medical_details: string | null
+  custom_answers: CustomAnswers
   consent_version: string
   consent_at: string
   guardian_name: string | null
@@ -183,4 +184,30 @@ export interface DashboardSummary {
   activities: number
   avg_participation: number
   unreached: number
+}
+
+export type QuestionType = 'text' | 'single_choice' | 'multi_choice' | 'yes_no'
+
+/** An Admin-made question (public.custom_questions). Never deleted, only deactivated. */
+export interface CustomQuestion {
+  id: string
+  label: string
+  help_text: string | null
+  question_type: QuestionType
+  options: string[]
+  is_required: boolean
+  is_active: boolean
+  is_sensitive: boolean
+  sort_order: number
+  created_at: string
+}
+
+/** Answers keyed by question id: text and single choice -> string, multi choice -> string[], yes/no -> boolean. */
+export type CustomAnswers = Record<string, string | string[] | boolean>
+
+/** Row of the youth_custom_answers view. sensitive_answers is null for Viewers. */
+export interface YouthCustomAnswers {
+  id: string
+  answers: CustomAnswers
+  sensitive_answers: CustomAnswers | null
 }

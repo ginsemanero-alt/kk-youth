@@ -1,31 +1,34 @@
 'use client'
-import { ShieldAlert } from 'lucide-react'
+import { MessageSquareText, ShieldAlert } from 'lucide-react'
 import TagInput from '@/components/TagInput'
 import { Field, inputCls } from '@/components/ui'
 import {
   AGE_BRACKETS, CIVIC_SUGGESTIONS, CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, EDU_STATUS_OPTIONS, EMPLOYMENT_OPTIONS, INTEREST_SUGGESTIONS,
   SECTOR_OPTIONS, SEX_OPTIONS, SKILL_SUGGESTIONS, YES_NO_OPTIONS,
 } from '@/lib/constants'
+import type { AnswerDraft } from '@/lib/customQuestions'
 import { ageOn } from '@/lib/format'
 import { DEFAULT_RULES, fieldApplies, required, shown, type FormRules } from '@/lib/formSettings'
-import type { Purok } from '@/lib/types'
+import type { CustomQuestion, Purok } from '@/lib/types'
 import type { ProfileValues, YesNo } from '@/lib/validation'
 
 const group = 'rounded-[2.5rem] bg-slate-50 p-6 ring-1 ring-black/5 sm:p-8'
 const legend = 'mb-5 text-sm font-black uppercase tracking-widest text-brand'
 const sub = 'mb-4 mt-8 text-xs font-black uppercase tracking-widest text-slate-500'
 
-export default function ProfileFields({ values, onChange, puroks, rules = DEFAULT_RULES, contactHint, idPrefix = 'f', youthCode, hideSensitive = false }: {
+export default function ProfileFields({ values, onChange, puroks, rules = DEFAULT_RULES, questions = [], contactHint, idPrefix = 'f', youthCode, hideSensitive = false }: {
   values: ProfileValues
   onChange: (next: ProfileValues) => void
   puroks: Pick<Purok, 'id' | 'name'>[]
   /** Form settings from public.form_fields (show / required per field). */
   rules?: FormRules
+  /** The Admin's own questions. Only active ones are shown. */
+  questions?: CustomQuestion[]
   contactHint?: string
   idPrefix?: string
   /** "ID No." of an existing profile. New profiles get one automatically. */
   youthCode?: string
-  /** Leave out religion, disability and medical even if the settings show them (no -SPI consent on file). */
+  /** Leave out religion, disability, medical and sensitive questions even if shown (no -SPI consent on file). */
   hideSensitive?: boolean
 }) {
   const set = <K extends keyof ProfileValues>(k: K, v: ProfileValues[K]) => onChange({ ...values, [k]: v })
@@ -45,11 +48,16 @@ export default function ProfileFields({ values, onChange, puroks, rules = DEFAUL
       {YES_NO_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   )
+  const sensitiveQuestionHint = (isRequired: boolean) => (
+    <span className="mb-2 flex items-center gap-1.5 px-2 text-xs font-bold text-flag"><ShieldAlert className="h-3.5 w-3.5" aria-hidden /> Sensitive. {isRequired ? 'Required.' : 'Voluntary, you may skip it.'}</span>
+  )
   const sensitiveHint = (k: string) => (
     <span className="mb-2 flex items-center gap-1.5 px-2 text-xs font-bold text-flag"><ShieldAlert className="h-3.5 w-3.5" aria-hidden /> Sensitive. {required(rules, k) ? 'Required.' : 'Voluntary, you may skip it.'}</span>
   )
 
   const showWork = show('employment_status')
+  const asked = questions.filter((q) => q.is_active && !(hideSensitive && q.is_sensitive))
+  const setAnswer = (qid: string, a: AnswerDraft) => set('custom_answers', { ...values.custom_answers, [qid]: a })
   const showOther = ['has_disability', 'has_medical_condition', 'youth_org_member', 'skills', 'interests', 'civic_involvement'].some(show)
 
   return (
@@ -268,6 +276,61 @@ export default function ProfileFields({ values, onChange, puroks, rules = DEFAUL
               </Field>
             )}
           </div>
+        </fieldset>
+      )}
+
+      {asked.length > 0 && (
+        <fieldset className={group}>
+          <div className={legend}>Karagdagang impormasyon</div>
+          <div className="space-y-5">
+            {asked.map((q) => {
+              const qid = id(`q-${q.id}`)
+              const v = values.custom_answers[q.id]
+              return (
+                <div key={q.id}>
+                  <Field label={q.label} hint={q.is_required ? 'Required' : 'Optional'} htmlFor={qid}>
+                    {q.is_sensitive && sensitiveQuestionHint(q.is_required)}
+                    {q.help_text && <p className="mb-2 px-2 text-xs font-semibold text-slate-500">{q.help_text}</p>}
+                    {q.question_type === 'text' && (
+                      <input id={qid} className={inputCls} value={(v as string) ?? ''} onChange={(e) => setAnswer(q.id, e.target.value)} maxLength={300} />
+                    )}
+                    {q.question_type === 'yes_no' && (
+                      <select id={qid} className={inputCls} value={(v as string) ?? ''} onChange={(e) => setAnswer(q.id, e.target.value)}>
+                        <option value="">Not answered</option>
+                        {YES_NO_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    )}
+                    {q.question_type === 'single_choice' && (
+                      <select id={qid} className={inputCls} value={(v as string) ?? ''} onChange={(e) => setAnswer(q.id, e.target.value)}>
+                        <option value="">Not answered</option>
+                        {q.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    )}
+                    {q.question_type === 'multi_choice' && (
+                      <div id={qid} role="group" aria-label={q.label} className="flex flex-wrap gap-2">
+                        {q.options.map((o) => {
+                          const list = Array.isArray(v) ? v : []
+                          const on = list.includes(o)
+                          return (
+                            <button
+                              key={o}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => setAnswer(q.id, on ? list.filter((x) => x !== o) : [...list, o])}
+                              className={`rounded-full px-4 py-2 text-sm font-black transition active:scale-95 ${on ? 'bg-ink text-white' : 'bg-white text-slate-600 ring-1 ring-black/10 hover:bg-slate-50'}`}
+                            >
+                              {o}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </Field>
+                </div>
+              )
+            })}
+          </div>
+          <p className="mt-5 flex items-center gap-2 text-xs font-semibold text-slate-400"><MessageSquareText className="h-4 w-4" aria-hidden /> Questions added by the SK.</p>
         </fieldset>
       )}
     </div>

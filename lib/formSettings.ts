@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { LEVELS_WITH_COURSE } from './constants'
-import type { EducationLevel, FormFieldSetting } from './types'
+import type { CustomQuestion, EducationLevel, FormFieldSetting } from './types'
 
 /**
  * Optional fields the Admin can show, hide or require (table public.form_fields).
@@ -49,6 +49,9 @@ export const DEFAULT_RULES = toRules(DEFAULT_FORM_FIELDS)
 export const shown = (rules: FormRules, key: string) => rules[key]?.visible ?? true
 export const required = (rules: FormRules, key: string) => Boolean(rules[key]?.visible && rules[key]?.required)
 export const anySensitiveShown = (rules: FormRules) => SENSITIVE_KEYS.some((k) => shown(rules, k))
+/** Does the form ask for anything sensitive (a sensitive field or an active sensitive question)? Decides the -SPI consent. */
+export const sensitiveAsked = (rules: FormRules, questions: CustomQuestion[] = []) =>
+  anySensitiveShown(rules) || questions.some((q) => q.is_active && q.is_sensitive)
 
 /** Does a conditional field apply to these answers? Same rules as form_field_applies() in the database. */
 export function fieldApplies(key: string, v: { education_level: string; education_status: string; employment_status: string; employment_sector: string }): boolean {

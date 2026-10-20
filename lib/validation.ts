@@ -1,5 +1,7 @@
 import { ageOn } from './format'
+import { answersPayload, validateAnswers, type AnswerDrafts } from './customQuestions'
 import { DEFAULT_RULES, fieldApplies, required, shown, type FormRules } from './formSettings'
+import type { CustomQuestion } from './types'
 
 /** yes/no questions are kept as '' (not answered), 'yes' or 'no' while the form is open. */
 export type YesNo = '' | 'yes' | 'no'
@@ -35,6 +37,8 @@ export interface ProfileValues {
   skills: string[]
   interests: string[]
   civic_involvement: string[]
+  /** Answers to the Admin's own questions, keyed by question id. */
+  custom_answers: AnswerDrafts
   guardian_name: string
   guardian_relationship: string
 }
@@ -45,7 +49,7 @@ export const emptyProfile: ProfileValues = {
   education_status: '', education_level: '', course: '', out_of_school_reason: '',
   employment_status: '', employment_sector: '', government_agency: '', employment_duration: '',
   has_disability: '', disability_details: '', has_medical_condition: '', medical_details: '', youth_org_member: '', youth_org_name: '',
-  skills: [], interests: [], civic_involvement: [], guardian_name: '', guardian_relationship: '',
+  skills: [], interests: [], civic_involvement: [], custom_answers: {}, guardian_name: '', guardian_relationship: '',
 }
 
 const PH_MOBILE = /^(\+63|0)9\d{9}$/
@@ -60,7 +64,11 @@ const blank = (x: unknown) => (Array.isArray(x) ? x.length === 0 : !String(x ?? 
  * Same checks as the database triggers, so the person sees the problem before submitting.
  * The database checks everything again.
  */
-export function validateProfile(v: ProfileValues, rules: FormRules = DEFAULT_RULES, opts: { requirePurok?: boolean; skip?: string[] } = {}): string | null {
+export function validateProfile(
+  v: ProfileValues,
+  rules: FormRules = DEFAULT_RULES,
+  opts: { requirePurok?: boolean; skip?: string[]; questions?: CustomQuestion[]; skipSensitiveQuestions?: boolean } = {},
+): string | null {
   if (!v.first_name.trim()) return 'First name is required.'
   if (!v.last_name.trim()) return 'Last name is required.'
   if (!v.birthdate) return 'Birthdate is required.'
@@ -80,7 +88,7 @@ export function validateProfile(v: ProfileValues, rules: FormRules = DEFAULT_RUL
   if (shown(rules, 'email') && v.email.trim() && (!EMAIL.test(v.email.trim()) || v.email.trim().length > 120)) return 'Please enter a valid email address.'
   if (shown(rules, 'youth_org_member') && v.youth_org_member === 'yes' && !v.youth_org_name.trim()) return 'Please give the name of the youth organization.'
   if (age < 18 && !v.guardian_name.trim()) return 'Parent or guardian name is required for youth below 18.'
-  return null
+  return validateAnswers(opts.questions ?? [], v.custom_answers, (q) => Boolean(opts.skipSensitiveQuestions && q.is_sensitive))
 }
 
 export const cleanPhone = (s: string) => s.replace(/[\s-]/g, '')
@@ -92,7 +100,11 @@ const text = (s: string) => s.trim() || null
  * also drops them), and a conditional field that no longer applies is sent as null.
  * contact_number is not included; callers handle it (it is encrypted separately).
  */
-export function profilePayload(v: ProfileValues, rules: FormRules, opts: { isMinor: boolean; includeSensitive: boolean }): Record<string, unknown> {
+export function profilePayload(
+  v: ProfileValues,
+  rules: FormRules,
+  opts: { isMinor: boolean; includeSensitive: boolean; questions?: CustomQuestion[] },
+): Record<string, unknown> {
   const applies = (k: string) => fieldApplies(k, v)
   const row: Record<string, unknown> = {
     first_name: v.first_name, last_name: v.last_name, birthdate: v.birthdate, sex: v.sex, purok_id: v.purok_id,
@@ -134,5 +146,8 @@ export function profilePayload(v: ProfileValues, rules: FormRules, opts: { isMin
   for (const [k, val] of Object.entries(optional)) {
     if (shown(rules, parent[k] ?? k)) row[k] = val
   }
+  // Answers to deactivated questions are kept by the database, so only active ones are sent.
+  // Left out entirely when there are no questions (06_custom_questions.sql may not be run yet).
+  if (opts.questions?.length) row.custom_answers = answersPayload(opts.questions, v.custom_answers, opts.includeSensitive)
   return row
 }

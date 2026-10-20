@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, FileCheck2, LifeBuoy, Pencil, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, FileCheck2, LifeBuoy, MessageSquareText, Pencil, ShieldCheck } from 'lucide-react'
 import { canEdit, requireRole } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { CIVIL_OPTIONS, EDU_LEVEL_OPTIONS, EMPLOYMENT_OPTIONS, SECTOR_OPTIONS, ACTIVITY_CATEGORIES, label, yesNo } from '@/lib/constants'
 import { formatDate, formatDateTime } from '@/lib/format'
-import type { YouthOverview, YouthSensitive } from '@/lib/types'
+import { formatAnswer, loadQuestions } from '@/lib/customQuestions'
+import type { CustomAnswers, YouthCustomAnswers, YouthOverview, YouthSensitive } from '@/lib/types'
 import { Alert, Badge, Card, EducationBadge, EmploymentBadge, Pill, SectionTitle, btnPrimary } from '@/components/ui'
 import { ConsentScanUpload, ContactReveal, DeleteRestore } from './YouthActions'
 
@@ -40,6 +41,14 @@ export default async function YouthDetailPage({ params }: { params: Promise<{ id
     const { data: s } = await supabase.from('youth_sensitive').select('*').eq('id', id).maybeSingle()
     sens = s as YouthSensitive | null
   }
+  // Answers to the Admin's questions. Sensitive answers come back only for Admin and Encoder.
+  const [{ data: ans }, questions] = await Promise.all([
+    supabase.from('youth_custom_answers').select('*').eq('id', id).maybeSingle(),
+    loadQuestions(supabase),
+  ])
+  const a = ans as YouthCustomAnswers | null
+  const allAnswers: CustomAnswers = { ...a?.answers, ...(canEdit(role) ? a?.sensitive_answers : null) }
+  const answered = questions.filter((q) => allAnswers[q.id] !== undefined)
   const hasSensitive = Boolean(sens && (sens.religion || sens.has_disability !== null || sens.has_medical_condition !== null))
 
   const { data: attendance } = await supabase
@@ -151,6 +160,26 @@ export default async function YouthDetailPage({ params }: { params: Promise<{ id
           )}
         </Card>
       </div>
+
+      {answered.length > 0 && (
+        <Card>
+          <SectionTitle sub="Questions added by the SK">
+            <span className="inline-flex items-center gap-2"><MessageSquareText className="h-6 w-6 text-brand" aria-hidden /> Karagdagang impormasyon</span>
+          </SectionTitle>
+          <dl className="grid gap-5 sm:grid-cols-2">
+            {answered.map((q) => (
+              <div key={q.id} className={q.is_sensitive ? 'rounded-[2rem] bg-red-50 p-5 ring-1 ring-red-200' : ''}>
+                <dt className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
+                  {q.label}
+                  {q.is_sensitive && <Badge tone="red">Sensitive</Badge>}
+                  {!q.is_active && <Badge tone="slate">No longer asked</Badge>}
+                </dt>
+                <dd className="mt-1 font-bold">{formatAnswer(allAnswers[q.id])}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      )}
 
       {y.is_osy && (
         <Card className="!bg-red-50 ring-red-200">

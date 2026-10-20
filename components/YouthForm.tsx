@@ -8,16 +8,18 @@ import { Alert, Field, btnGhost, btnPrimary, inputCls } from '@/components/ui'
 import { CONSENT_SPI_TEXT, GUARDIAN_CONSENT_TEXT, consentVersionFor } from '@/lib/constants'
 import { ageOn } from '@/lib/format'
 import { friendlyError } from '@/lib/errors'
-import { anySensitiveShown, required, toRules } from '@/lib/formSettings'
-import type { FormFieldSetting } from '@/lib/types'
+import { required, sensitiveAsked, toRules } from '@/lib/formSettings'
+import type { CustomQuestion, FormFieldSetting } from '@/lib/types'
 import { useToast } from '@/components/Toast'
 import { cleanPhone, emptyProfile, profilePayload, validateProfile, type ProfileValues } from '@/lib/validation'
 
-export default function YouthForm({ mode, puroks, settings, youthId, youthCode, consentVersion, initial }: {
+export default function YouthForm({ mode, puroks, settings, questions, youthId, youthCode, consentVersion, initial }: {
   mode: 'create' | 'edit'
   puroks: { id: string; name: string }[]
   /** Form settings (public.form_fields), read on the server. */
   settings: FormFieldSetting[]
+  /** Active custom questions. */
+  questions: CustomQuestion[]
   youthId?: string
   youthCode?: string
   /** Consent version already on file (edit mode). */
@@ -38,7 +40,7 @@ export default function YouthForm({ mode, puroks, settings, youthId, youthCode, 
 
   const age = v.birthdate ? ageOn(v.birthdate) : null
   const isMinor = age !== null && age >= 0 && age < 18
-  const sensitiveShown = anySensitiveShown(rules)
+  const sensitiveShown = sensitiveAsked(rules, questions)
   const newVersion = consentVersionFor(sensitiveShown)
   // Sensitive fields can be added to an existing profile only if its consent covers them.
   const includeSensitive = mode === 'create' || Boolean(consentVersion?.endsWith('-SPI'))
@@ -50,7 +52,7 @@ export default function YouthForm({ mode, puroks, settings, youthId, youthCode, 
       ...(mode === 'edit' ? ['contact_number'] : []),
       ...(includeSensitive ? [] : ['religion', 'has_disability', 'has_medical_condition']),
     ]
-    const problem = validateProfile(v, rules, { skip })
+    const problem = validateProfile(v, rules, { skip, questions, skipSensitiveQuestions: !includeSensitive })
     if (problem) return fail(problem)
     if (mode === 'create') {
       if (!consentOn) return fail('Confirm that the signed consent form is on file before saving.')
@@ -60,7 +62,7 @@ export default function YouthForm({ mode, puroks, settings, youthId, youthCode, 
 
     setBusy(true)
     const supabase = createClient()
-    const fields = profilePayload(v, rules, { isMinor, includeSensitive })
+    const fields = profilePayload(v, rules, { isMinor, includeSensitive, questions })
 
     let id = youthId
     if (mode === 'create') {
@@ -95,7 +97,7 @@ export default function YouthForm({ mode, puroks, settings, youthId, youthCode, 
       {error && <Alert>{error}</Alert>}
       {mode === 'edit' && !includeSensitive && sensitiveShown && (
         <Alert tone="info">
-          Religion, disability and medical fields are not shown for this profile: its consent ({consentVersion}) does not cover sensitive information.
+          Religion, disability, medical and sensitive questions are not shown for this profile: its consent ({consentVersion}) does not cover sensitive information.
           Record a new signed consent ({newVersion}) first if these are needed.
         </Alert>
       )}
@@ -104,6 +106,7 @@ export default function YouthForm({ mode, puroks, settings, youthId, youthCode, 
         onChange={setV}
         puroks={puroks}
         rules={rules}
+        questions={questions}
         idPrefix={mode}
         youthCode={youthCode}
         hideSensitive={!includeSensitive}

@@ -1,6 +1,6 @@
 # Database design
 
-Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`. Re-running 01 or 02 means running every later file again, in order.
+Run order: `supabase/01_schema.sql`, `02_security.sql`, `03_seed.sql`, `04_form_fields_extra.sql`, `05_form_settings.sql`, `06_custom_questions.sql`. Re-running a file means running every later file again, in order.
 
 ## ERD
 
@@ -15,6 +15,8 @@ erDiagram
   PENDING_REGISTRATIONS }o--o| YOUTH : "approved into"
   PROFILES ||--o{ AUDIT_LOGS : "acts"
   FORM_FIELDS ||--o{ FORM_FIELDS : "depends_on"
+  CUSTOM_QUESTIONS ||--o{ YOUTH : "answered in custom_answers"
+  CUSTOM_QUESTIONS ||--o{ PENDING_REGISTRATIONS : "answered in custom_answers"
 
   PROFILES { uuid id PK text full_name app_role role bool is_active }
   PUROKS { uuid id PK text name timestamptz deleted_at }
@@ -41,8 +43,10 @@ erDiagram
     text religion "sensitive"
     bool has_disability "sensitive"
     bool has_medical_condition "sensitive"
+    jsonb custom_answers
     timestamptz deleted_at
   }
+  CUSTOM_QUESTIONS { uuid id PK text label text question_type text_array options bool is_required bool is_active bool is_sensitive int sort_order }
   FORM_FIELDS { text field_key PK text label text section bool is_visible bool is_required bool is_sensitive int sort_order text depends_on FK }
   YOUTH_CONTACTS { uuid youth_id PK bytea contact_enc }
   ACTIVITIES { uuid id PK text title date activity_date text category }
@@ -84,8 +88,14 @@ Added to both `youth` and `pending_registrations`: `email` (120, format checked)
 
 `youth_no_duplicates` (unique), `youth_purok_idx`, `youth_birthdate_idx`, `youth_education_idx`, `youth_employment_idx` (partial on `deleted_at is null`), `youth_name_idx`, `attendance_youth_idx`, `activities_date_idx`, `pending_status_idx`, `audit_created_idx`, `audit_table_idx`.
 
+## Custom questions (06)
+
+`custom_questions` (label, help_text, question_type: text / single_choice / multi_choice / yes_no, options, is_required, is_active, is_sensitive, sort_order). No hard delete (a trigger blocks it, even for the owner); type and sensitive flag cannot change after creation. Answers live in `custom_answers jsonb` on `youth` and `pending_registrations`, keyed by question id. `validate_custom_answers()` checks type, options, required, the 300-character text limit and unknown keys; answers to deactivated questions are kept on edit and dropped from new records. `approve_registration()` and `import_youth()` carry the answers.
+
 ## Views
 
 `youth_overview` and `activity_stats` use `security_invoker = true`, so the caller's Row Level Security applies to them. Without this, a view would bypass RLS. `youth_overview` has the new non-sensitive fields but no sensitive ones.
 
-`youth_sensitive` (religion, disability, medical) is the one view that runs with the owner's rights, because API roles have no SELECT on those columns. It returns rows only to Admin and Encoder and repeats the soft-delete rule of the `youth read` policy.
+`youth_custom_answers` (id, answers, sensitive_answers) also runs with the owner's rights, because `custom_answers` is not readable through `youth`. `answers` holds the non-sensitive answers for every signed-in role; `sensitive_answers` is filled only for Admin and Encoder.
+
+`youth_sensitive` (religion, disability, medical) is the other view that runs with the owner's rights, because API roles have no SELECT on those columns. It returns rows only to Admin and Encoder and repeats the soft-delete rule of the `youth read` policy.
