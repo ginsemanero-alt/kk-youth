@@ -60,8 +60,8 @@ export default function RegisterForm({ puroks, settings, questions }: {
   if (done) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl items-center px-4 py-12">
-        <Card className="text-center">
-          <div className="relative mx-auto w-fit">
+        <Card className="animate-pop text-center">
+          <div className="relative mx-auto w-fit animate-float">
             <Logo size={96} />
             <span className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white ring-4 ring-white"><CircleCheck className="h-6 w-6" /></span>
           </div>
@@ -77,15 +77,20 @@ export default function RegisterForm({ puroks, settings, questions }: {
     <>
     <PublicHeader />
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-8">
-      <div className="relative isolate overflow-hidden rounded-[3.5rem] bg-linear-to-br from-ink via-ink to-brand-deep p-8 text-white sm:p-10">
-        <div className="absolute -right-16 -top-16 -z-10 h-56 w-56 rounded-full bg-sun/25 blur-3xl" aria-hidden />
+      <div className="relative isolate animate-rise overflow-hidden rounded-[3.5rem] bg-linear-to-br from-ink via-ink to-brand-deep p-8 text-white shadow-2xl shadow-ink/20 sm:p-10">
+        <div className="absolute -right-16 -top-16 -z-10 h-56 w-56 animate-drift rounded-full bg-sun/25 blur-3xl" aria-hidden />
+        <div className="absolute -bottom-20 -left-10 -z-10 h-56 w-56 animate-drift rounded-full bg-flag/25 blur-3xl [animation-delay:-9s]" aria-hidden />
         <div className="flex flex-col-reverse gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <span className="block w-fit rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest text-ink">Ages 15 to 30</span>
             <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Youth registration</h1>
             <p className="mt-2 font-semibold text-white/75">Katipunan ng Kabataan youth profile of {ORG.barangay}. Takes about three minutes. An SK encoder reviews your answers before they are added to the registry.</p>
           </div>
-          <Logo size={112} preload className="!ring-4" />
+          <div className="relative w-fit animate-float">
+            <div className="tri-ring absolute -inset-2 animate-spin-slow rounded-full" aria-hidden />
+            <div className="absolute -inset-0.5 rounded-full bg-ink" aria-hidden />
+            <Logo size={112} preload className="relative !ring-4" />
+          </div>
         </div>
       </div>
 

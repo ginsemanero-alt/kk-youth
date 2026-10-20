@@ -12,7 +12,7 @@ import { DEFAULT_RULES, fieldApplies, required, shown, type FormRules } from '@/
 import type { CustomQuestion, Purok } from '@/lib/types'
 import type { ProfileValues, YesNo } from '@/lib/validation'
 
-const group = 'rounded-[2.5rem] bg-slate-50 p-6 ring-1 ring-black/5 sm:p-8'
+const group = 'rounded-[2.5rem] bg-white p-6 shadow-[0_1px_2px_rgb(11_18_56/0.04),0_12px_32px_-14px_rgb(11_18_56/0.14)] ring-1 ring-black/5 transition-shadow focus-within:shadow-[0_20px_44px_-18px_rgb(9_55_177/0.35)] focus-within:ring-brand/20 sm:p-8'
 const legend = 'mb-5 text-sm font-black uppercase tracking-widest text-brand'
 const sub = 'mb-4 mt-8 text-xs font-black uppercase tracking-widest text-slate-500'
 
@@ -61,7 +61,7 @@ export default function ProfileFields({ values, onChange, puroks, rules = DEFAUL
   const showOther = ['has_disability', 'has_medical_condition', 'youth_org_member', 'skills', 'interests', 'civic_involvement'].some(show)
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       <fieldset className={group}>
         <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
           <div className={legend.replace('mb-5 ', '')}>Personal information</div>

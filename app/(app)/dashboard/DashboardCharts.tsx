@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { CountItem, DashboardSummary } from '@/lib/types'
+import Reveal from '@/components/Reveal'
 
 const tip = { borderRadius: 20, border: 'none', boxShadow: '0 10px 30px rgba(10,18,48,0.18)', fontWeight: 700 }
 const tick = { fontSize: 11, fontWeight: 700 }
@@ -13,11 +14,14 @@ const EMP: Record<string, { label: string; color: string }> = {
 
 function ChartCard({ title, sub, children, wide }: { title: string; sub?: string; children: ReactNode; wide?: boolean }) {
   return (
-    <section className={`rounded-[3.5rem] bg-white p-8 shadow-sm ring-1 ring-black/5 sm:p-10 ${wide ? 'lg:col-span-2' : ''}`}>
-      <h2 className="text-xl font-black tracking-tight">{title}</h2>
-      {sub && <p className="text-sm font-semibold text-slate-400">{sub}</p>}
+    <Reveal as="section" className={`rounded-[3.5rem] bg-white p-8 shadow-[0_1px_2px_rgb(11_18_56/0.04),0_12px_32px_-12px_rgb(11_18_56/0.12)] ring-1 ring-black/5 transition-shadow duration-300 hover:shadow-[0_24px_48px_-16px_rgb(11_18_56/0.2)] sm:p-10 ${wide ? 'lg:col-span-2' : ''}`}>
+      <div className="flex items-center gap-3">
+        <span className="h-8 w-1.5 rounded-full bg-linear-to-b from-brand via-sun to-flag" aria-hidden />
+        <h2 className="text-xl font-black tracking-tight">{title}</h2>
+      </div>
+      {sub && <p className="mt-1 text-sm font-semibold text-slate-400">{sub}</p>}
       <div className="mt-5 h-72">{children}</div>
-    </section>
+    </Reveal>
   )
 }
 
@@ -29,7 +33,7 @@ function Donut({ data }: { data: { name: string; value: number; color: string }[
   return (
     <ResponsiveContainer width="100%" height="100%">
       <PieChart>
-        <Pie isAnimationActive={false} data={rows} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={3} stroke="none">
+        <Pie animationDuration={900} data={rows} dataKey="value" nameKey="name" innerRadius={62} outerRadius={100} paddingAngle={3} stroke="none">
           {rows.map((r) => <Cell key={r.name} fill={r.color} />)}
         </Pie>
         <Tooltip contentStyle={tip} />
@@ -48,7 +52,7 @@ function HBars({ items, color }: { items: CountItem[]; color: string }) {
         <XAxis type="number" allowDecimals={false} tick={tick} />
         <YAxis type="category" dataKey="label" width={110} tick={tick} />
         <Tooltip contentStyle={tip} cursor={{ fill: '#f1f5f9' }} />
-        <Bar dataKey="count" name="Youth" fill={color} radius={[0, 16, 16, 0]} />
+        <Bar dataKey="count" name="Youth" fill={color} radius={[0, 16, 16, 0]} animationDuration={900} />
       </BarChart>
     </ResponsiveContainer>
   )

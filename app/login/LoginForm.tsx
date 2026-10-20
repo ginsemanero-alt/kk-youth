@@ -37,11 +37,16 @@ export default function LoginForm({ next, inactive }: { next?: string; inactive?
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="relative hidden flex-col justify-between overflow-hidden bg-linear-to-br from-ink via-ink to-brand-deep p-12 text-white lg:flex">
         <TriStripe className="absolute inset-x-0 top-0 h-1.5" />
-        <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand/60 blur-3xl" aria-hidden />
-        <div className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-sun/25 blur-3xl" aria-hidden />
+        <div className="absolute -right-24 -top-24 h-96 w-96 animate-drift rounded-full bg-brand/60 blur-3xl" aria-hidden />
+        <div className="absolute -bottom-32 -left-16 h-96 w-96 animate-drift rounded-full bg-sun/25 blur-3xl [animation-delay:-8s]" aria-hidden />
+        <div className="absolute inset-0 opacity-[0.06] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
         <Link href="/" className="relative w-fit" aria-label="Home"><BrandMark tone="light" size={48} /></Link>
-        <div className="relative">
-          <Logo size={176} preload className="!ring-4 shadow-2xl" />
+        <div className="relative stagger">
+          <div className="relative w-fit animate-float">
+            <div className="tri-ring absolute -inset-2.5 animate-spin-slow rounded-full" aria-hidden />
+            <div className="absolute -inset-1 rounded-full bg-ink" aria-hidden />
+            <Logo size={176} preload className="relative !ring-4 shadow-2xl" />
+          </div>
           <h2 className="mt-10 text-6xl font-black leading-[1.02] tracking-tight">Know your youth.<br />Plan for them.</h2>
           <p className="mt-6 max-w-md text-lg font-semibold text-white/70">Staff access for the officers and encoders of the {ORG.sk}. Every action is recorded in the audit log.</p>
         </div>
@@ -49,7 +54,7 @@ export default function LoginForm({ next, inactive }: { next?: string; inactive?
       </section>
 
       <section className="flex items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-md rounded-[3.5rem] bg-white p-8 shadow-sm ring-1 ring-black/5 sm:p-10">
+        <div className="w-full max-w-md animate-rise rounded-[3.5rem] bg-white p-8 shadow-[0_24px_60px_-24px_rgb(11_18_56/0.3)] ring-1 ring-black/5 sm:p-10">
           <Link href="/" className="mb-8 inline-flex items-center gap-2 text-sm font-black text-slate-500 hover:text-ink">
             <ArrowLeft className="h-4 w-4" /> Back to home
           </Link>

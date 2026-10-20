@@ -35,7 +35,7 @@ export default function AppShell({ role, name, children }: { role: Role; name: s
   const items = ITEMS.filter((i) => i.roles.includes(role))
 
   const nav = (
-    <nav aria-label="Main" className="flex flex-col gap-1">
+    <nav aria-label="Main" className="stagger flex flex-col gap-1">
       {items.map(({ href, label, icon: Icon }, i) => {
         const active = path === href || (href !== '/dashboard' && path.startsWith(href + '/'))
         // Label the start of the Admin-only links.
@@ -48,11 +48,11 @@ export default function AppShell({ role, name, children }: { role: Role; name: s
               href={href}
               onClick={() => setOpen(false)}
               aria-current={active ? 'page' : undefined}
-              className={`group flex items-center gap-3 rounded-full px-5 py-2.5 text-sm font-black transition ${
-                active ? 'bg-sun text-ink shadow-lg shadow-black/20' : 'text-white/75 hover:bg-white/10 hover:text-white'
+              className={`group flex items-center gap-3 rounded-full px-5 py-2.5 text-sm font-black transition duration-200 ${
+                active ? 'bg-sun text-ink shadow-lg shadow-black/20' : 'text-white/75 hover:translate-x-1 hover:bg-white/10 hover:text-white'
               }`}
             >
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition ${active ? 'bg-ink text-sun' : 'bg-white/10 text-white group-hover:bg-white/15'}`}>
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition duration-300 ${active ? 'bg-ink text-sun' : 'bg-white/10 text-white group-hover:scale-110 group-hover:bg-white/20'}`}>
                 <Icon className="h-4 w-4" aria-hidden />
               </span>
               {label}
@@ -65,8 +65,15 @@ export default function AppShell({ role, name, children }: { role: Role; name: s
 
   const account = (
     <div className="mt-6 rounded-[2rem] bg-white/10 p-5 ring-1 ring-white/10">
-      <div className="truncate text-sm font-black text-white">{name || 'Account'}</div>
-      <div className="mt-2"><RoleBadge role={role} /></div>
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-sun to-amber-400 text-sm font-black text-ink shadow-md">
+          {(name || 'A').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-black text-white">{name || 'Account'}</div>
+          <div className="mt-1"><RoleBadge role={role} /></div>
+        </div>
+      </div>
       <Link href="/account" onClick={() => setOpen(false)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-black text-white hover:bg-white/20">
         <KeyRound className="h-4 w-4" aria-hidden /> My account
       </Link>

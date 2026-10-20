@@ -3,18 +3,19 @@ import type { LucideIcon } from 'lucide-react'
 import { Inbox, TriangleAlert, CircleCheck, Info } from 'lucide-react'
 import type { EducationStatus, EmploymentStatus, RegistrationStatus, Role } from '@/lib/types'
 import { TriStripe } from '@/components/Logo'
+import CountUp from '@/components/CountUp'
 
 // ---------- class tokens ----------
-const btn = 'inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50'
-export const btnPrimary = `${btn} bg-brand text-white shadow-lg shadow-brand/25 hover:bg-brand-deep`
-export const btnDark = `${btn} bg-ink text-white hover:bg-brand-deep`
-export const btnSun = `${btn} bg-sun text-ink hover:brightness-95`
-export const btnGhost = `${btn} bg-white text-ink ring-1 ring-black/10 hover:bg-slate-50`
-export const btnDanger = `${btn} bg-flag text-white hover:brightness-110`
+const btn = 'shine inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-black transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 disabled:pointer-events-none disabled:opacity-50'
+export const btnPrimary = `${btn} bg-linear-to-r from-brand to-brand-deep text-white shadow-lg shadow-brand/30 hover:shadow-xl hover:shadow-brand/40`
+export const btnDark = `${btn} bg-ink text-white shadow-md shadow-ink/20 hover:bg-brand-deep hover:shadow-lg`
+export const btnSun = `${btn} bg-sun text-ink shadow-md shadow-sun/30 hover:shadow-lg hover:shadow-sun/40`
+export const btnGhost = `${btn} bg-white text-ink shadow-sm ring-1 ring-black/10 hover:shadow-md hover:ring-brand/30`
+export const btnDanger = `${btn} bg-flag text-white shadow-md shadow-flag/25 hover:shadow-lg hover:shadow-flag/40`
 export const inputCls =
-  'w-full rounded-full border-2 border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-ink placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/15 disabled:bg-slate-100'
+  'w-full rounded-full border-2 border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-ink transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/15 disabled:bg-slate-100'
 export const textareaCls =
-  'w-full rounded-[2rem] border-2 border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-ink placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/15'
+  'w-full rounded-[2rem] border-2 border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-ink transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/15'
 export const chipCls = (active: boolean) =>
   `inline-flex items-center rounded-full px-4 py-2 text-sm font-black transition active:scale-95 ${
     active ? 'bg-ink text-white' : 'bg-white text-slate-600 ring-1 ring-black/10 hover:bg-slate-50'
@@ -22,36 +23,50 @@ export const chipCls = (active: boolean) =>
 
 // ---------- layout atoms ----------
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-[3.5rem] bg-white p-8 shadow-sm ring-1 ring-black/5 sm:p-10 ${className}`}>{children}</div>
+  return <div className={`rounded-[3.5rem] bg-white p-8 shadow-[0_1px_2px_rgb(11_18_56/0.04),0_12px_32px_-12px_rgb(11_18_56/0.12)] ring-1 ring-black/5 sm:p-10 ${className}`}>{children}</div>
 }
 
 export function PageHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title: string; subtitle?: string; right?: ReactNode }) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0">
+      <div className="min-w-0 animate-rise">
         {eyebrow && (
-          <span className="inline-block rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest text-ink">{eyebrow}</span>
+          <span className="inline-flex items-center gap-2 rounded-full bg-sun px-4 py-1.5 text-xs font-black uppercase tracking-widest text-ink shadow-sm shadow-sun/40">
+            <span className="h-1.5 w-1.5 rounded-full bg-ink" aria-hidden />{eyebrow}
+          </span>
         )}
         <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">{title}</h1>
         <TriStripe className="mt-4 h-1.5 w-20 rounded-full" />
         {subtitle && <p className="mt-3 max-w-2xl font-semibold text-slate-500">{subtitle}</p>}
       </div>
-      {right && <div className="flex flex-wrap gap-2">{right}</div>}
+      {right && <div className="flex flex-wrap gap-2 animate-rise [animation-delay:120ms]">{right}</div>}
     </div>
   )
 }
 
-export function StatCard({ label, value, sub, tone = 'bg-white text-ink', icon: Icon }: {
+/**
+ * A number tile. `tone` is the accent (background + text classes, for example 'bg-flag text-white'):
+ * it colors the icon, the corner glow and the bottom bar, while the tile itself stays white.
+ */
+export function StatCard({ label, value, sub, tone = 'bg-brand text-white', icon: Icon }: {
   label: string; value: ReactNode; sub?: string; tone?: string; icon?: LucideIcon
 }) {
+  const accent = tone.includes('bg-white') ? 'bg-ink text-white' : tone
+  const counted = typeof value === 'number' || (typeof value === 'string' && /^\d/.test(value)) ? <CountUp value={value as number | string} /> : value
   return (
-    <div className={`rounded-[3.5rem] p-8 shadow-sm ring-1 ring-black/5 ${tone}`}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-black uppercase tracking-widest opacity-70">{label}</span>
-        {Icon && <Icon className="h-5 w-5 opacity-70" aria-hidden />}
+    <div className="group relative isolate overflow-hidden rounded-[2rem] bg-white p-5 shadow-[0_1px_2px_rgb(11_18_56/0.04),0_12px_32px_-12px_rgb(11_18_56/0.14)] ring-1 ring-black/5 transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_48px_-16px_rgb(11_18_56/0.25)] sm:rounded-[2.5rem] sm:p-7">
+      <div className={`absolute -right-10 -top-10 -z-10 h-32 w-32 rounded-full opacity-10 blur-xl transition duration-500 group-hover:scale-150 group-hover:opacity-20 ${accent}`} aria-hidden />
+      <div className="flex items-start justify-between gap-3">
+        <span className="pt-1 text-[10px] font-black uppercase tracking-widest text-slate-500 sm:text-xs">{label}</span>
+        {Icon && (
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md sm:h-11 sm:w-11 sm:rounded-2xl transition duration-300 group-hover:rotate-6 group-hover:scale-110 ${accent}`}>
+            <Icon className="h-5 w-5" aria-hidden />
+          </span>
+        )}
       </div>
-      <div className="mt-3 text-5xl font-black tracking-tight">{value}</div>
-      {sub && <div className="mt-1 text-sm font-bold opacity-70">{sub}</div>}
+      <div className="mt-3 text-3xl font-black tracking-tight text-ink sm:text-5xl">{counted}</div>
+      {sub && <div className="mt-1 text-xs font-bold text-slate-500 sm:text-sm">{sub}</div>}
+      <div className={`absolute inset-x-0 bottom-0 h-1.5 origin-left scale-x-0 transition duration-500 group-hover:scale-x-100 ${accent}`} aria-hidden />
     </div>
   )
 }
@@ -59,7 +74,7 @@ export function StatCard({ label, value, sub, tone = 'bg-white text-ink', icon: 
 export function EmptyState({ icon: Icon = Inbox, title, hint, action }: { icon?: LucideIcon; title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="rounded-[3.5rem] border-2 border-dashed border-slate-300 bg-white/60 px-8 py-14 text-center">
-      <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-soft text-brand">
+      <span className="mx-auto flex h-16 w-16 animate-pop items-center justify-center rounded-full bg-brand-soft text-brand">
         <Icon className="h-8 w-8" aria-hidden />
       </span>
       <h3 className="mt-5 text-2xl font-black">{title}</h3>
